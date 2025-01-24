@@ -1,21 +1,66 @@
 import numpy as np
-
+from matplotlib import pyplot as plt
+from astropy.io import fits
+from photutils.segmentation import detect_sources, detect_threshold, make_2dgaussian_kernel, SourceFinder, SourceCatalog, make_2dgaussian_kernel
+from astropy.stats import sigma_clipped_stats, SigmaClip
+from photutils.background import SExtractorBackground as SourceExtractorBackground
+from photutils.background import Background2D, MedianBackground
+from photutils.utils import circular_footprint
+from astropy.convolution import convolve
+from astropy.coordinates import SkyCoord, ICRS
+from astropy.wcs import WCS
+from photutils.aperture import aperture_photometry, CircularAnnulus, CircularAperture
+from photutils.centroids import centroid_quadratic, centroid_sources
+from astropy import units as u
 
 # here are functions for grabbing the data, doing background subtractions and manipulating source extractions
 def get_image(url):
-    from astropy.io import fits
+    """Access a cutout via a call to a CATCH URL
+
+
+    Parameters
+    ----------
+    url : string
+        CATCH-generated URL from a query.
+
+   
+
+    Returns
+    -------
+    data : array_like
+        This is a 2D array containing the image data returned by the CATCH query
+    header : 
+        FITS header class, from astropy.io.fits.Header 
+
+
+    """
+
     fits_hdu = fits.open(url)
-    data = fits_hdu[1].data
-    header = fits_hdu[1].header
+    data = fits_hdu[0].data
+    header = fits_hdu[0].header
     return data, header
 
 def global_subtraction(data):
-    from photutils.segmentation import detect_sources, detect_threshold
-    from astropy.stats import sigma_clipped_stats, SigmaClip
-    from photutils.background import SExtractorBackground as SourceExtractorBackground
-    from photutils.background import Background2D, MedianBackground
-    from photutils.utils import circular_footprint
-    # performs a global background subtraction, masking sources using image segmentation IDs
+    """performs a global background subtraction, masking sources using image segmentation IDs
+
+
+    Parameters
+    ----------
+    data : array_like
+        2D image array to be background subtracted
+
+   
+
+    Returns
+    -------
+    data_sub : array_like
+        Background subtracted data array
+    bkg : 
+        background object returned from photutils Background2D
+
+
+    """
+
     sigma_clip = SigmaClip(sigma=3.0, maxiters=10)
     
     threshold = detect_threshold(data, nsigma=2.0, sigma_clip=sigma_clip)
@@ -35,11 +80,26 @@ def global_subtraction(data):
     return data_sub, bkg
 
 def get_background(data):
-    from photutils.segmentation import detect_sources, detect_threshold
-    from astropy.stats import sigma_clipped_stats, SigmaClip
-    from photutils.background import SExtractorBackground as SourceExtractorBackground
-    from photutils.background import Background2D, MedianBackground
-    from photutils.utils import circular_footprint
+
+    """computes and returns .a global background subtraction, masking sources using image segmentation IDs.
+       Does NOT return background subtracted data
+
+
+    Parameters
+    ----------
+    data : array_like
+        2D image array to compute background on
+
+   
+
+    Returns
+    -------
+    bkg :
+        background object returned from photutils Background2D
+
+
+    """
+
     # performs a global background subtraction, masking sources using image segmentation IDs
     sigma_clip = SigmaClip(sigma=3.0, maxiters=10)
     
@@ -59,14 +119,31 @@ def get_background(data):
     return bkg
     
 def id_good_sources_subtracted(data,bkg):
-    # uses a segmentation image to identify reliable sources that can be snapped to
-    #
-    # coincidentally computes baseline photometry that could be used as a quality comparison user results,
-    # though this flux isn't always a good comparison as it often underestimates the source size
-    source_threshold = 1.5 * bkg.background_rms
 
-    from astropy.convolution import convolve
-    from photutils.segmentation import make_2dgaussian_kernel, SourceFinder
+    """Uses a segmentation image to identify reliable sources in BACKGROUND-SUBTRACTED image that can be snapped to.
+
+       Coincidentally, computes baseline photometry that could be used as a quality comparison user results,
+       though this flux isn't always a good comparison as it often underestimates the source size
+
+
+    Parameters
+    ----------
+    data : array_like
+        2D image array to be background subtracted
+
+    bkg :
+        background object returned from get_background() or global_subtraction()
+
+    Returns
+    -------
+    cat : 
+        Astropy Table class, from SourceCatalog output giving source locations, fluxes
+    
+
+
+    """    
+
+    source_threshold = 1.5 * bkg.background_rms
 
     kernel = make_2dgaussian_kernel(3.0, size=5)  # FWHM = 3.0
     convolved_data = convolve(data, kernel)
@@ -87,20 +164,38 @@ def id_good_sources_subtracted(data,bkg):
     ax2.set_title('Segmentation Image')
 
     
-    from photutils.segmentation import SourceCatalog
+    
     cat = SourceCatalog(data, segment_map, convolved_data=convolved_data)
     
     return cat
 
 def id_good_sources_unsubtracted(data,bkg):
-    # uses a segmentation image to identify reliable sources that can be snapped to
-    #
-    # coincidentally computes baseline photometry that could be used as a quality comparison user results,
-    # though this flux isn't always a good comparison as it often underestimates the source size
+
+    """Uses a segmentation image to identify reliable sources in NON-BACKGROUND-SUBTRACTED image that can be snapped to.
+
+       Coincidentally, computes baseline photometry that could be used as a quality comparison user results,
+       though this flux isn't always a good comparison as it often underestimates the source size
+
+
+    Parameters
+    ----------
+    data : array_like
+        2D image array to be background subtracted
+
+    bkg :
+        background object returned from get_background() or global_subtraction()
+
+    Returns
+    -------
+    cat :
+        Astropy Table class, from SourceCatalog output giving source locations, fluxes
+    
+
+
+    """    
+
     source_threshold = bkg.background_median + 1.5 * bkg.background_rms
 
-    from astropy.convolution import convolve
-    from photutils.segmentation import make_2dgaussian_kernel, SourceFinder
 
     kernel = make_2dgaussian_kernel(3.0, size=5)  # FWHM = 3.0
     convolved_data = convolve(data, kernel)
@@ -121,21 +216,58 @@ def id_good_sources_unsubtracted(data,bkg):
     ax2.set_title('Segmentation Image')
 
     
-    from photutils.segmentation import SourceCatalog
     cat = SourceCatalog(data, segment_map, convolved_data=convolved_data)
     
     return cat
     
 def create_user_aperture(position,size):
-    # simple placeholder function for making user-selected apertures
-    from photutils.aperture import CircularAperture
+    """Simple placeholder function for making user-selected circular apertures
+
+
+    Parameters
+    ----------
+    Position : array_like
+        [x,y] location of aperture center
+
+    Size : Int
+        Radius of aperture, given in pixels
+
+    Returns
+    -------
+    aperture : 
+        Photutils circular aperture object with the specified size, location parameters
+    
+
+
+    """    
+    
     aperture = CircularAperture(position, r=size)
     return aperture
 
 def snap_to_brightest_pixel(user_point,data,radius):
-    # takes in a user defined point and returns the location of the brightest pixel within radius pixels
-    from photutils.centroids import centroid_quadratic, centroid_sources
-    from photutils.utils import circular_footprint
+
+    """Takes in a user defined point and returns the location of the brightest pixel within radius pixels
+
+
+    Parameters
+    ----------
+    user_point : array_like
+        [x,y] location of desired point, to be snapped from
+
+    data : array_like
+           image to be searched for sources to be snapped to
+
+    radius : Int
+             number of pixels within which objects can be snapped to from user_point
+
+    Returns
+    -------
+    target_position: array_like
+                     [x,y] location of the source that is closest to user_point found in data
+    
+
+    """        
+
     footprint = circular_footprint(radius)
     x, y = centroid_sources(data, user_point[0], user_point[1], footprint=footprint,
                             centroid_func=centroid_quadratic)
@@ -145,12 +277,41 @@ def snap_to_brightest_pixel(user_point,data,radius):
     return target_position
     
 def calc_annulus_bkg(data,position,inner_r,outer_r):
-    # a function to take in an image array and position + inner/outer radii for a circular annulus
-    # computes and returns background median, variance from pixels within this annulus
-    # 
-    # currently exports the annulus object, too, although this might not be necessary
-    from photutils.aperture import CircularAnnulus
-    from astropy.stats import sigma_clipped_stats, SigmaClip
+    
+    """ Takes in an image array and position + inner/outer radii for a circular annulus
+        Computes and returns background median, variance from pixels within this annulus
+     
+        Currently exports the annulus object, too, although this might not be necessary
+
+
+
+    Parameters
+    ----------
+    data : array_like
+           image data to be used for photometry
+
+    position : array_like
+             [x,y] pixel location to define center CircularAnnulus object
+
+    inner_r : float
+              Distance (in pixels) from annulus center to the inner edge
+
+    outer_r : float
+              Distance (in pixels) from annulus center to the outer edge
+
+    Returns
+    -------
+    bkg_median : float
+                 median value of pixels within the annulus
+    
+    bkg_var : float
+              variance of pixels within the annulus, as square of range of values from 50-16th percentiles
+
+    annulus_aperture : 
+                       Photutils annulus aperture object with the specified size, location parameters
+
+
+    """
     annulus_aperture = CircularAnnulus(position, r_in=inner_r, r_out=outer_r)
     annulus_mask = annulus_aperture.to_mask(method='center')
     
@@ -172,14 +333,42 @@ def calc_annulus_bkg(data,position,inner_r,outer_r):
     return bkg_median, bkg_var, annulus_aperture
         
 def do_aperture_photometry(data,source_aperture,bkg_median, bkg_var, bkg_aperture):
-    from photutils.aperture import aperture_photometry
-    # takes in an image, a source aperture, and outputs from the calc_annulus_bkg function
-    # 
-    # returns the source flux (background subtracted, per-pixel background median) and the
-    # uncertainty as defined at the quoted link
+    """ Takes in an image, a source aperture, and outputs from the calc_annulus_bkg function
+     
+        Returns the source flux (background subtracted, per-pixel background median) and the
+        uncertainty as defined at the quoted link
     
-    # method='center' means pixels are either in or out, no interpolation to a perfect circle
-    # (in other words, areas will be in whole pixels)
+        method='center' means pixels are either in or out, no interpolation to a perfect circle
+        (in other words, areas will be in whole pixels)
+
+    Parameters
+    ----------
+    data : array_like
+           image data to be used for photometry
+
+    source_aperture : 
+             Photutils aperture object containing desired source
+
+    bkg_median : float
+                 median value of pixel background, 
+    
+    bkg_var : float
+              variance of pixel background, ideally from output of calc_annulus_background
+
+    bkg_aperture : 
+                   Photutils aperture object containing background, ideally as annulus_aperture output from calc_annulus_background
+
+
+    Returns
+    -------
+    source_sum : float
+                 background subtracted flux of the targeted source
+    
+    source_err : float
+                 error on source flux
+
+    """
+
     aperture_mask = source_aperture.to_mask(method='center')
     aperture_data = aperture_mask.multiply(data)
     aperture_sum = np.nansum(aperture_data)
@@ -190,7 +379,7 @@ def do_aperture_photometry(data,source_aperture,bkg_median, bkg_var, bkg_apertur
     
     # Using uncertainty as derived by https://wise2.ipac.caltech.edu/staff/fmasci/ApPhotUncert.pdf
     # Setting the gain g=1, N_i = 1. Assumes data has already been converted to e-
-    ### REMEMBER TO FIND THE GAINS FOR EACH SURVEY
+    ### TODO: FIND THE GAINS FOR EACH SURVEY
     term1 = source_sum
     term2 = (source_aperture.area + (np.pi/2) * (np.square(source_aperture.area)/bkg_aperture.area) )*bkg_var
     source_err = np.sqrt(term1 + term2)
@@ -198,8 +387,28 @@ def do_aperture_photometry(data,source_aperture,bkg_median, bkg_var, bkg_apertur
     return source_sum, source_err
 
 def load_thumbnail(url):
-    from astropy.io import fits
-    from astropy.wcs import WCS
+    """Access a cutout via a call to a CATCH URL, returning WCSobject
+
+
+    Parameters
+    ----------
+    url : string
+        CATCH-generated URL from a query.
+
+   
+
+    Returns
+    -------
+    data : array_like
+        This is a 2D array containing the image data returned by the CATCH query
+
+    header : 
+             FITS header class, from astropy.io.fits.Header 
+
+    img_WCS:
+             Astropy WCS object
+
+    """
     fits_hdu = fits.open(url)
     data = fits_hdu[0].data
     header = fits_hdu[0].header
@@ -207,18 +416,78 @@ def load_thumbnail(url):
     return data, header, img_WCS
 
 def get_pixel_WCS(img_WCS,pixel):
+    """Retrieve WCS location of a pixel given its (x,y) position
+
+    Parameters
+    ----------
+    
+    img_WCS: 
+             Astropy WCS object
+
+    pixel: array_like
+           [x,y] pixel location to get WCS location of
+
+
+    Returns
+    -------
+    loc: 
+         Astropy SkyCoord location of desired pixel
+    """
+    
     loc = img_WCS.pixel_to_world(pixel[0],pixel[1])
     return loc
 
 def get_WCS_pixel(img_WCS,ra_dec):
-    from astropy.coordinates import SkyCoord, ICRS
+    """Retrieve pixel location at a given (RA, Dec) sky coordinate position
+
+    Parameters
+    ----------
+    
+    img_WCS: 
+             Astropy WCS object
+
+    ra_dec: array_like
+           [Right Ascension, Declination] location to retrieve pixel location of
+
+    Returns
+    -------
+
+    loc: array_like
+         Pixel location of specified (RA, Dec)
+    """
+
     sky_loc = SkyCoord(ICRS(ra=ra_dec[0]*u.deg, dec=ra_dec[1]*u.deg))
     loc = img_WCS.world_to_pixel(sky_loc)
     return loc
     
 def source_instr_mag(ap_flux,ap_fluxerr,exposure_time):
-    # quick function to return instrumental magnitudes from a source flux
-    # I'm really tedious about not treating magnitude uncertainties as symmetric
+
+    """ Quick function to return instrumental magnitudes from a source flux
+        Does not force magnitude uncertainties to be symmetric
+        
+        To be used by calibrated_mag() function
+
+
+    Parameters
+    ----------
+    
+    ap_flux: float
+             Flux (in counts) of source
+
+    ap_fluxerr: float
+                Flux error (in counts)
+
+    exposure_time: float
+                   integration time of the frame (s)
+
+    Returns
+    -------
+
+    instr_mag_array: array_like
+                     array containing source instrumental magnitude and uncertainties,
+                     as [Magnitude, Upper Magnitude Uncertainty, Lower Magnitude Uncertainty]
+    """
+
     instr_mag = -2.5*np.log10(ap_flux/exposure_time)
     instr_mag_hi = -2.5*np.log10((ap_flux-ap_fluxerr)/exposure_time)
     instr_mag_lo = -2.5*np.log10((ap_flux+ap_fluxerr)/exposure_time)
@@ -231,8 +500,30 @@ def source_instr_mag(ap_flux,ap_fluxerr,exposure_time):
     return instr_mag_array
 
 def calibrated_mag(instr_mag_array,zero_point,zero_point_uncert):
-    # takes in the array from source_instr_mag, converts to derived magnitude,
-    # propagating uncertainties from both
+    """ Takes in the array from source_instr_mag, converts to derived magnitude,
+        propagating uncertainties from both
+
+    
+    Parameters
+    ----------
+    instr_mag_array: array_like
+                     From source_instr_mag() output: array containing source instrumental magnitude and uncertainties,
+                     as [Magnitude, Upper Magnitude Uncertainty, Lower Magnitude Uncertainty]
+
+    zero_point: float
+                zero point magnitude of image (ideally taken from metadata in header given by astrometry solution)
+
+    zero_point_uncert: float
+                       zero point uncertainty (mags) of image (ideally taken from metadata in header given by astrometry solution)
+    
+    Returns
+    -------
+
+    calib_mag_array: array_like
+                     array containing source CALIBRATED magnitude and uncertainties,
+                     as [Magnitude, Upper Magnitude Uncertainty, Lower Magnitude Uncertainty]
+    """
+
     calib_mag = zero_point+instr_mag_array[0]
     calib_mag_hi = np.sqrt(np.square(zero_point_uncert) + np.square(instr_mag_array[1]))
     calib_mag_lo = np.sqrt(np.square(zero_point_uncert) + np.square(instr_mag_array[2]))
