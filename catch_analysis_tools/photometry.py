@@ -106,7 +106,7 @@ def get_background(data):
     
 def id_good_sources(data,bkg):
 
-    """Uses a segmentation image to identify reliable sources in image that can be snapped to.
+    """Uses a segmentation image to identify reliable sources in NON-BACKGROUND-SUBTRACTED image that can be snapped to.
 
        Coincidentally, computes baseline photometry that could be used as a quality comparison user results,
        though this flux isn't always a good comparison as it often underestimates the source size
