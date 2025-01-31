@@ -1,6 +1,6 @@
 [project]
-name = "catch_photometry"
-description = "A package to support photometry analysis tools within the CATCH interface"
+name = "catch_analysis_tools"
+description = "A package to support analysis tools within the CATCH interface"
 readme = "README.md"
 authors = [
     { name = "Ben Sharkey", email = "sharkey@umd.edu" },
@@ -10,7 +10,7 @@ authors = [
 license = { text = "BSD 3-Clause License" }
 dependencies = [
     "numpy",
-    "astropy>=3.2",
+    "astropy>=6.1",
     "photutils",
     "scipy",
 ]

@@ -56,32 +56,19 @@ def global_subtraction(data):
     data_sub : array_like
         Background subtracted data array
     bkg : 
-        background object returned from photutils Background2D
+        background object returned from get_background(data) 
 
 
     """
 
-    sigma_clip = SigmaClip(sigma=3.0, maxiters=10)
-    
-    threshold = detect_threshold(data, nsigma=2.0, sigma_clip=sigma_clip)
-    segment_img = detect_sources(data, threshold, npixels=10)
-
-    footprint = circular_footprint(radius=10)
-    mask = segment_img.make_source_mask(footprint=footprint)
-    mean, median, std = sigma_clipped_stats(data, sigma=3.0, mask=mask)
-    
-    
-    bkg_estimator = SourceExtractorBackground(sigma_clip)
-    bkg = Background2D(data, (50, 50), filter_size=(3, 3),
-                       sigma_clip=sigma_clip, mask=mask, bkg_estimator=bkg_estimator)
-    
+    bkg = get_background(data)
     data_sub = data-bkg.background_median
 
     return data_sub, bkg
 
 def get_background(data):
 
-    """computes and returns .a global background subtraction, masking sources using image segmentation IDs.
+    """computes and returns a global background subtraction, masking sources using image segmentation IDs.
        Does NOT return background subtracted data
 
 
@@ -108,7 +95,6 @@ def get_background(data):
 
     footprint = circular_footprint(radius=10)
     mask = segment_img.make_source_mask(footprint=footprint)
-    mean, median, std = sigma_clipped_stats(data, sigma=3.0, mask=mask)
      
     
     bkg_estimator = SourceExtractorBackground(sigma_clip)
@@ -118,58 +104,7 @@ def get_background(data):
 
     return bkg
     
-def id_good_sources_subtracted(data,bkg):
-
-    """Uses a segmentation image to identify reliable sources in BACKGROUND-SUBTRACTED image that can be snapped to.
-
-       Coincidentally, computes baseline photometry that could be used as a quality comparison user results,
-       though this flux isn't always a good comparison as it often underestimates the source size
-
-
-    Parameters
-    ----------
-    data : array_like
-        2D image array to be background subtracted
-
-    bkg :
-        background object returned from get_background() or global_subtraction()
-
-    Returns
-    -------
-    cat : 
-        Astropy Table class, from SourceCatalog output giving source locations, fluxes
-    
-
-
-    """    
-
-    source_threshold = 1.5 * bkg.background_rms
-
-    kernel = make_2dgaussian_kernel(3.0, size=5)  # FWHM = 3.0
-    convolved_data = convolve(data, kernel)
-    finder = SourceFinder(npixels=5,progress_bar=False)
-    segment_map = finder(convolved_data, source_threshold)
-    
-    
-    vmax = np.percentile(np.ndarray.flatten(data),99)
-    vmin = np.percentile(np.ndarray.flatten(data),1)
-    
-    # make a plot to show the background subtracted frame and the resulting segment map
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12.5))
-    ax1.imshow(data, origin='lower', cmap='Greys_r', vmin=vmin,vmax=vmax)
-    ax1.set_title('Original Data')
-
-    ax2.imshow(segment_map, origin='lower', cmap=segment_map.cmap,
-           interpolation='nearest')
-    ax2.set_title('Segmentation Image')
-
-    
-    
-    cat = SourceCatalog(data, segment_map, convolved_data=convolved_data)
-    
-    return cat
-
-def id_good_sources_unsubtracted(data,bkg):
+def id_good_sources(data,bkg):
 
     """Uses a segmentation image to identify reliable sources in NON-BACKGROUND-SUBTRACTED image that can be snapped to.
 
@@ -273,7 +208,6 @@ def snap_to_brightest_pixel(user_point,data,radius):
                             centroid_func=centroid_quadratic)
     
     target_position = np.array([x[0],y[0]])
-    print(target_position)
     return target_position
     
 def calc_annulus_bkg(data,position,inner_r,outer_r):
