@@ -142,13 +142,13 @@ def id_good_sources(data,bkg):
     vmin = np.percentile(np.ndarray.flatten(data),1)
     
     # make a plot to show the background subtracted frame and the resulting segment map
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12.5))
-    ax1.imshow(data, origin='lower', cmap='Greys_r', vmin=vmin,vmax=vmax)
-    ax1.set_title('Original Data')
+    #fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12.5))
+    #ax1.imshow(data, origin='lower', cmap='Greys_r', vmin=vmin,vmax=vmax)
+    #ax1.set_title('Original Data')
 
-    ax2.imshow(segment_map, origin='lower', cmap=segment_map.cmap,
-           interpolation='nearest')
-    ax2.set_title('Segmentation Image')
+    #ax2.imshow(segment_map, origin='lower', cmap=segment_map.cmap,
+    #       interpolation='nearest')
+    #ax2.set_title('Segmentation Image')
 
     
     cat = SourceCatalog(data, segment_map, convolved_data=convolved_data)
