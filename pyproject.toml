@@ -21,3 +21,6 @@ homepage = "https://catch.astro.umd.edu/"
 
 [tool.setuptools_scm]
 write_to = "catch_photometry/version.py"
+
+[project.optional-dependencies]
+test = ["pytest", "pytest-remotedata"]

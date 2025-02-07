@@ -5,8 +5,7 @@ from photutils.datasets import make_wcs
 
 # here are test functions for grabbing the data, doing background subtractions and manipulating source extractions
 
-from ..photometry import get_image, global_subtraction, get_background, id_good_sources, create_user_aperture, snap_to_brightest_pixel, calc_annulus_bkg, \
-                         do_aperture_photometry, get_pixel_WCS, get_WCS_pixel, source_instr_mag, calibrated_mag
+from ..photometry import *
 
 @pytest.mark.remote_data
 def test_image_data():
@@ -56,10 +55,10 @@ def test_create_aperture():
     assert approx(aperture.area) == 452.3893421169302
 
 @pytest.mark.remote_data
-def test_snap_to_brightest_pixel():
+def test_subpixel_centroid():
     test_url = 'https://sbnsurveys.astro.umd.edu/api/images/urn%3Anasa%3Apds%3Agbo.ast.neat.survey%3Adata_tricam%3Ap20020121_obsdata_20020121132624c?format=fits&size=10.00arcmin&ra=177.51011&dec=15.25013'
     data, header = get_image(test_url)
-    source = snap_to_brightest_pixel([175,145],data,15)
+    source = subpixel_centroid([175,145],data,15)
     assert approx(source) == np.array([170.36590938, 151.69671471])
 
 def test_calc_annulus_bkg():
@@ -78,8 +77,6 @@ def test_do_aperture_photometry():
     assert approx([source_sum, source_err]) == [92.28235162232964, 15.19308011549977]
 
 #####
-
-from ..photometry import load_thumbnail
     
 # these tests require test.fits to be located in the test folder:
 #def test_load_thumbnail_data():
@@ -116,7 +113,8 @@ def test_get_WCS_pixel():
     wcs = make_wcs(shape)
 
     x, y = get_WCS_pixel(wcs,[197.89278975, -1.36561284])
-    assert approx(np.round([x,y])) == [42.,57.]
+
+    assert all(np.round([x, y]) == [42.0, 57.0])
 
 def test_source_instr_mag():
     mag = source_instr_mag(10,1,1)
@@ -124,4 +122,5 @@ def test_source_instr_mag():
 
 def test_calibrated_mag():
     calib_mag = calibrated_mag(source_instr_mag(10,1,1),22,0.5)
+    print (calib_mag)
     assert approx(calib_mag[0] + calib_mag[1]) == 20.01291902

@@ -179,7 +179,7 @@ def create_user_aperture(position,size):
     aperture = CircularAperture(position, r=size)
     return aperture
 
-def snap_to_brightest_pixel(user_point,data,radius):
+def subpixel_centroid(user_point,data,radius):
 
     """Takes in a user defined point and returns the location of the brightest pixel within radius pixels
 
