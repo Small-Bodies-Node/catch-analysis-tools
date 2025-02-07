@@ -1,4 +1,4 @@
-ƒimport numpy as np
+import numpy as np
 from matplotlib import pyplot as plt
 from astropy.io import fits
 from photutils.segmentation import detect_sources, detect_threshold, make_2dgaussian_kernel, SourceFinder, SourceCatalog, make_2dgaussian_kernel
