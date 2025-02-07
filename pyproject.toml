@@ -6,6 +6,7 @@ authors = [
     { name = "Ben Sharkey", email = "sharkey@umd.edu" },
     { name = "Michael Kelley", email = "msk@astro.umd.edu"}, 
     { name = "Yaeji Kim", email = "ykim1231@umd.edu"}
+    { name = "John Dailey", email = "dailey@umd.edu"}
 ]
 license = { text = "BSD 3-Clause License" }
 dependencies = [
