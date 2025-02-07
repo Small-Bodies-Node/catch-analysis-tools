@@ -5,8 +5,7 @@ from photutils.datasets import make_wcs
 
 # here are test functions for grabbing the data, doing background subtractions and manipulating source extractions
 
-from ..photometry import get_image, global_subtraction, get_background, id_good_sources, create_user_aperture, snap_to_brightest_pixel, calc_annulus_bkg, \
-                         do_aperture_photometry, get_pixel_WCS, get_WCS_pixel, source_instr_mag, calibrated_mag
+from ..photometry import *
 
 @pytest.mark.remote_data
 def test_image_data():
@@ -123,4 +122,5 @@ def test_source_instr_mag():
 
 def test_calibrated_mag():
     calib_mag = calibrated_mag(source_instr_mag(10,1,1),22,0.5)
+    print (calib_mag)
     assert approx(calib_mag[0] + calib_mag[1]) == 20.01291902
