@@ -12,7 +12,6 @@ from ..background import *
 def test_image():
     test_url = 'https://sbnsurveys.astro.umd.edu/api/images/urn%3Anasa%3Apds%3Agbo.ast.neat.survey%3Adata_tricam%3Ap20020121_obsdata_20020121132624c?format=fits&size=10.00arcmin&ra=177.51011&dec=15.25013'
     data, header = get_image(test_url)
-    errors = []
     # test some basic values checked manually against above image values
     assert approx(data[10,10]) == 1558.4028
     assert approx(header['SECZ']) == 1.055449
