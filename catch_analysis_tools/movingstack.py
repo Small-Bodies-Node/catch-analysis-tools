@@ -101,7 +101,7 @@ def project_fits_to_wcs(input_fits, new_wcs, shape_out, photometric_cal=True, su
         hdu.writeto(os.getcwd()+"/"+os.path.splitext(os.path.basename(input_fits))[0]+".subtracted.fit",overwrite=True)
 
     # Reproject the image onto the new WCS
-    reprojected_data, _ = reproject_interp((input_data, original_wcs), new_wcs, shape_out=shape_out)
+    reprojected_data = reproject_interp((input_data, original_wcs), new_wcs, shape_out=shape_out,return_footprint=False)
 
     return reprojected_data
 
