@@ -1,5 +1,3 @@
-#!/home/dailey/bin/miniconda3/bin/python
-
 from astropy.wcs import WCS
 from astropy.io import fits
 from astropy.coordinates import SkyCoord
@@ -22,14 +20,21 @@ def create_wcs(ra, dec, size_x, size_y, pixel_scale=0.4):
     Create an undistorted WCS object based on a given reference position and image size.
     
     Parameters:
-    ra (float): Right Ascension (RA) of the reference position in degrees.
-    dec (float): Declination (Dec) of the reference position in degrees.
-    size_x (int): Number of pixels along the x-axis (image width).
-    size_y (int): Number of pixels along the y-axis (image height).
-    pixel_scale (float): Pixel scale in arcseconds per pixel (default is 0.4"/pixel).
+    ra : float
+        Right Ascension (RA) of the reference position in degrees.
+
+    dec : float
+        Declination (Dec) of the reference position in degrees.
+    size_x : int 
+        Number of pixels along the x-axis (image width).
+    size_y : int 
+        Number of pixels along the y-axis (image height).
+    pixel_scale :  float 
+        Pixel scale in arcseconds per pixel (default is 0.4"/pixel).
     
     Returns:
-    wcs: An astropy WCS object.
+    wcs : astropy.wcs.WCS
+        An astropy WCS object.
     """
 
     # Create a WCS object
@@ -55,12 +60,16 @@ def project_fits_to_wcs(input_fits, new_wcs, shape_out, photometric_cal=True, su
     Project a FITS image onto a new WCS using the reproject library.
 
     Parameters:
-    input_fits (str): Path to the input FITS file.
-    new_wcs (astropy.wcs.WCS): The target WCS object.
-    shape_out (tuple): The shape (height, width) of the output image.
+    input_fits : str
+        Path to the input FITS file.
+    new_wcs : astropy.wcs.WCS
+        The target WCS object.
+    shape_out :tuple 
+        The shape (height, width) of the output image.
 
     Returns:
-    reprojected_data (2D numpy array): The image reprojected onto the new WCS.
+    reprojected_data : numpy.array(ndim=2)
+        The image reprojected onto the new WCS.
     """
     # Open the input FITS file and extract the data and WCS
     with fits.open(input_fits) as hdu_list:
@@ -101,10 +110,12 @@ def get_photozp(header):
   Get a photometric zero point from a fits header (return default if not found)
 
   Parameters:
-  header (object):  A fits header object
+  header : astropy.io.fits.Header
+    A fits header object
 
   Returns:
-  photometric zero point
+  zeropoint : float
+    photometric zero point
   """
   try:
     return header["MAGZEROP"]
@@ -128,10 +139,12 @@ def get_wcs(input_fits):
   Get a World Coordinate System (WCS) object from a fits file
 
   Parameters:
-  input_fits: a fits file
+  input_fits : file
+    a fits file
 
   Returns:
-  wcs: a WCS object
+  wcs : astropy.wcs.WCS
+    An astropy WCS object.
   """
   with fits.open(input_fits) as hdu_list:
     try:
@@ -151,9 +164,12 @@ def get_minpixsc(wcs):
   Get the minimum pixel scale of the image
 
   Parameters:
-  wcs:  A world coordinate system object
+  wcs : astropy.wcs.WCS
+    An astropy WCS object.
 
-  Returns: the minimum pixel scale
+  Returns:
+  pixelscale : float
+    The minimum pixel scale
   """
   try:
     wcs.wcs.cd
@@ -166,9 +182,12 @@ def get_maxpixsc(wcs):
   Get the maximum pixel scale of the image
 
   Parameters:
-  wcs:  A world coordinate system object
+  wcs : astropy.wcs.WCS
+    An astropy WCS object.
 
-  Returns: the maximum pixel scale
+  Returns:
+  pixelscale : float
+    The maximum pixel scale
   """
   try:
     wcs.wcs.cd
@@ -182,10 +201,10 @@ def unquoted_string(arg):
     Helper function to remove quotes from a string
 
     Parameters:
-    arg: a string
+    arg : string
 
     Returns:
-    the string with it's quotes removed
+    stripped : string
     """
     return arg.strip('\'"')
 
