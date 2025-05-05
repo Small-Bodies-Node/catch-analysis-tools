@@ -171,11 +171,12 @@ def get_minpixsc(wcs):
   pixelscale : float
     The minimum pixel scale
   """
-  try:
-    wcs.wcs.cd
-    return np.sort(np.abs(wcs.wcs.cd.flatten()))[-2]
-  except AttributeError:
-    return min(wcs.wcs.cdelt)
+  return min(np.abs(v.value) for v in wcs.proj_plane_pixel_scales())
+  #try:
+  #  wcs.wcs.cd
+  #  return np.sort(np.abs(wcs.wcs.cd.flatten()))[-2]
+  #except AttributeError:
+  #  return min([np.abs(v) for v in wcs.wcs.cdelt])
     
 def get_maxpixsc(wcs):
   """
@@ -189,11 +190,12 @@ def get_maxpixsc(wcs):
   pixelscale : float
     The maximum pixel scale
   """
-  try:
-    wcs.wcs.cd
-    return np.sort(np.abs(wcs.wcs.cd.flatten()))[-1]
-  except AttributeError:
-    return max(wcs.wcs.cdelt)
+  return max(np.abs(v.value) for v in wcs.proj_plane_pixel_scales())
+  #try:
+  #  wcs.wcs.cd
+  #  return np.sort(np.abs(wcs.wcs.cd.flatten()))[-1]
+  #except AttributeError:
+  #  return max([np.abs(v) for v in wcs.wcs.cdelt])
 
 
 def unquoted_string(arg):
@@ -228,6 +230,9 @@ wcs = [get_wcs(dataroot+"fits/"+frm["product_id"]+".fit") for frm in jdata]
 #  print(w.wcs.cd)
 #  print(np.abs(w.wcs.cd.flatten()))
 #  print(np.sort(np.abs(w.wcs.cd.flatten()))[-2])
+#  print([v.value for v in w.proj_plane_pixel_scales()])
+#  print(np.sort(np.abs([v.value for v in w.proj_plane_pixel_scales()])))
+#  print(max(np.abs(v.value) for v in wcs.proj_plane_pixel_scales()))
 minpixsc = min([get_minpixsc(w) for w in wcs])
 maxpixsc = max([get_maxpixsc(w) for w in wcs])
 maxsz = round(max([max(w.array_shape) for w in wcs])*maxpixsc/minpixsc*2**.5)
