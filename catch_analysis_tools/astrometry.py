@@ -1,7 +1,6 @@
 import os
 import subprocess
-import json
-import requests
+import argparse
 import numpy as np
 import pandas as pd
 import sep
@@ -12,69 +11,6 @@ from astropy.wcs import WCS
 from astropy.table import Table
 from astropy.coordinates import SkyCoord
 import calviacat as cvc
-
-def load_fits_image(target_name, data_sources, fn=3):
-    """
-    Load a FITS image from local disk or download via the CATCH API.
-
-    Parameters
-    ----------
-    target_name : str
-        Identifier of the astronomical target (e.g., comet or asteroid).
-    data_sources : str
-        Name of the survey (e.g., neat_palomar_tricam, ps1dr2, etc.).
-    fn : int, optional
-        Frame index to select from the API response (default is 0).
-
-    Returns
-    -------
-    input_fits : str
-        Path to the FITS file on local disk.
-    file_base : str
-        Base filename without extension.
-    hdulist : astropy.io.fits.HDUList
-        Opened FITS HDUList object.
-    image : array_like
-        2D image data array from the FITS file.
-
-    Raises
-    ------
-    requests.HTTPError
-        If any HTTP request fails.
-    IndexError
-        If the frame index `fn` is out of range in the API response.
-    """
-    input_fits = f"{target_name}_{data_sources}.fits"
-    file_base = os.path.splitext(input_fits)[0]
-
-    if os.path.exists(input_fits):
-        hdulist = fits.open(input_fits)
-        image = fitsio.read(input_fits)
-    else:
-        params = {"target": target_name, "sources": data_sources, "cached": "true"}
-        base_url = "https://catch-dev-api.astro.umd.edu"
-        res = requests.get(f"{base_url}/catch", params=params, timeout=10)
-        res.raise_for_status()
-        data = res.json()
-
-        if data.get('message') == 'Found cached data.  Retrieve from results URL.':
-            results_url = data.get('results')
-            res = requests.get(results_url, timeout=10)
-            res.raise_for_status()
-            data = res.json()
-
-        try:
-            entry = data['data'][fn]
-        except (IndexError, KeyError):
-            raise IndexError(f"Frame index {fn} out of range")
-
-        cutout_url = entry.get('cutout_url')
-        hdulist = fits.open(cutout_url)
-        image = fitsio.read(cutout_url)
-        hdulist.writeto(input_fits, overwrite=True)
-
-    return input_fits, file_base, hdulist, image
-
 
 def run_solve_field(input_fits, output_wcs, pixel_scale, scale_units="arcsecperpix"):
     """
@@ -115,14 +51,16 @@ def run_solve_field(input_fits, output_wcs, pixel_scale, scale_units="arcsecperp
         raise RuntimeError(f"solve-field failed: {e}")
 
 
-def find_sources(image, snr, aperture_radius=7.0):
+def find_sources(image_sub, bkg_err, snr, aperture_radius=7.0):
     """
     Detect sources in an image using SEP background subtraction and extraction.
 
     Parameters
     ----------
-    image : np.ndarray or MaskedArray
-        2D image data, possibly masked, for source detection.
+    image_sub : array_like
+        2D numpy array after background subtraction (cleaned image).
+    bkg_err : float or array_like
+        Background noise estimate (global RMS or per‐pixel error map).
     snr : float
         Minimum signal-to-noise ratio threshold for source extraction.
     aperture_radius : float, optional
@@ -132,31 +70,22 @@ def find_sources(image, snr, aperture_radius=7.0):
     -------
     source_list : pd.DataFrame
         Table of detected sources with aperture photometry columns.
-    telescope_image_sub : np.ndarray
+    image_sub : np.ndarray
         Background-subtracted image array.
     """
-    mask_lower_limit = 0 
-    mask = np.isinf(image) | (image <= mask_lower_limit)
-    image = np.ma.masked_array(image, mask)
-    image_data = np.asarray(
-        getattr(image, "filled", lambda x: x)(0),
-        dtype=np.float32
-    )
-    bkg = sep.Background(image_data)
-    telescope_image_sub = image_data - bkg.back()
     sep.set_sub_object_limit(500)
     sources = sep.extract(
-        telescope_image_sub,
+        image_sub,
         thresh=snr,
-        err=bkg.globalrms,
+        err=bkg_err,
         deblend_nthresh=16
     )
     source_list = pd.DataFrame(sources)
     flux, flux_err, _ = sep.sum_circle(
-        telescope_image_sub,
+        image_sub,
         source_list['x'], source_list['y'],
         aperture_radius,
-        err=bkg.globalrms
+        err=bkg_err
     )
     source_list['aperture_sum'] = flux
     source_list['aperture_err'] = flux_err
@@ -210,7 +139,12 @@ def retrieve_sources(source_list, wcs_solution):
     return source_list, sky_coords
 
 
-def calibrate_photometry(sky_coords, source_list, catalog='PanSTARRS1'):
+def calibrate_photometry(
+    sky_coords,
+    source_list,
+    catalog: str   = 'PanSTARRS1',
+    obs_band: str  = 'r',
+    cal_band: str  = 'g'):
     """
     Calibrate instrumental magnitudes against a Pan-STARRS1 catalog.
 
@@ -220,22 +154,31 @@ def calibrate_photometry(sky_coords, source_list, catalog='PanSTARRS1'):
         Celestial coordinates of detected sources.
     source_list : pd.DataFrame
         Table of detected sources containing 'aperture_sum'.
-    catalog : str, optional  
-        Name of the photometric catalog to use (default is 'PanSTARRS1').  
+    catalog : str, optional
+        Name of the photometric catalog class in calviacat (default 'PanSTARRS1').
+    obs_band : str, optional
+        Filter of your observed image (e.g. 'g', 'r', 'i'; default 'r').
+    cal_band : str, optional
+        Reference catalog filter for color term (e.g. 'g', 'r', 'i'; default 'g').
 
     Returns
     -------
     calibration : dict
         Dictionary with keys:
-        - 'zp': zero-point magnitude
-        - 'C': color term coefficient
-        - 'unc': uncertainty of zero-point
-        - 'g': calibrated magnitudes array
-        - 'g_inst': instrumental magnitudes array
-        - 'gmr': color indices (g-r)
-        - 'objids': matched catalog object IDs
-        - 'distances': matching distances
+        - zp           : float, zero-point magnitude
+        - C            : float, color-term coefficient
+        - unc          : float, uncertainty of zero-point
+        - m            : array_like, calibrated magnitudes in the observed band
+        - m_inst       : array_like, instrumental magnitudes
+        - obs_band     : str, same as input obs_band
+        - cal_band     : str, same as input cal_band
+        - color_mags   : array_like, color indices (obs_band - cal_band)
+        - color_index  : str, the color string used (e.g. 'r-g')
+        - objids       : array_like, matched catalog object IDs
+        - distances    : array_like, matching distances
     """
+    color_index = f"{obs_band}-{cal_band}"
+    
     try:
         CatalogClass = getattr(cvc, catalog)
     except AttributeError:
@@ -246,27 +189,53 @@ def calibrate_photometry(sky_coords, source_list, catalog='PanSTARRS1'):
     if len(results[0]) < 500:
         ref.fetch_field(sky_coords)
     objids, distances = ref.xmatch(sky_coords)
-    g_inst = -2.5 * np.log10(source_list['aperture_sum'].values)
-    zp, C, unc, g, gmr, gmi = ref.cal_color(objids, g_inst, 'g', 'g-r')
-    return {'zp': zp, 'C': C, 'unc': unc, 'g': g, 'g_inst': g_inst, 'gmr': gmr, 'objids': objids, 'distances': distances}
+    m_inst = -2.5 * np.log10(source_list['aperture_sum'].values)
+    zp, C, unc, m_cal, color_mags, _ = ref.cal_color(
+            objids,
+            m_inst,
+            obs_band,
+            color_index,
+        )
+    return {
+        'zp'          : zp,
+        'C'           : C,
+        'unc'         : unc,
+        'm'           : m_cal,
+        'm_inst'      : m_inst,
+        'obs_band'    : obs_band,
+        'cal_band'    : cal_band,
+        'color_mags'  : color_mags,
+        'color_index' : color_index,
+        'objids'      : objids,
+        'distances'   : distances,
+    }
 
 
-def plot_color_correction(gmr, g, g_inst, C, zp):
+def plot_color_correction(
+    color_mags,
+    m,
+    m_inst,
+    C,
+    zp,
+    color_index: str
+):
     """
     Plot the relation between instrumental and calibrated magnitudes.
 
     Parameters
     ----------
-    gmr : array_like
-        Color indices (g - r) of matched stars.
-    g : array_like
+    color_mags : array_like
+        Color indices (obs_band - cal_band) of matched stars.
+    m : array_like
         Calibrated magnitudes from reference catalog.
-    g_inst : array_like
+    m_inst : array_like
         Instrumental magnitudes measured.
     C : float
         Color term coefficient.
     zp : float
         Zero-point magnitude.
+    color_index : str
+        Label for the color axis (e.g. 'r-g').
 
     Returns
     -------
@@ -274,11 +243,11 @@ def plot_color_correction(gmr, g, g_inst, C, zp):
         Matplotlib figure and axis objects for the plot.
     """
     fig, ax = plt.subplots()
-    ax.scatter(gmr, g - g_inst, marker='.')
+    ax.scatter(color_mags, m - m_inst, marker='.')
     x = np.linspace(0, 1.5, 100)
-    ax.plot(x, C * x + zp)
-    ax.set_xlabel('$g-r$ (mag)')
-    ax.set_ylabel('$g - g_{inst}$ (mag)')
+    ax.plot(x, C * x + zp, color='red', label=f'$m = C\\times({color_index}) + ZP$')
+    ax.set_xlabel(f'${color_index}$ (mag)')
+    ax.set_ylabel(r'$m - m_{\mathrm{inst}}$ (mag)')
     plt.tight_layout()
     return fig, ax
 
@@ -316,7 +285,7 @@ def plot_image(telescope_image_sub, source_list, matched_idx, colored_idx):
     return fig, ax
 
 
-def create_header(image, wcs_solution, zp, unc, source_list, matched_idx, colored_idx, input_fits):
+def create_header(image, wcs_solution, zp, unc, source_list, matched_idx, colored_idx, input_fits, cal_band: str, catalog: str, obj_band: str):
     """
     Create and write a FITS file with calibrated header and source tables.
 
@@ -347,11 +316,10 @@ def create_header(image, wcs_solution, zp, unc, source_list, matched_idx, colore
     primary_hdu = fits.PrimaryHDU(data=image_arr, header=wcs_solution.to_header())
     primary_hdu.header['ZP'] = zp
     primary_hdu.header['ZP_STD'] = unc
-    primary_hdu.header['SUV_FLT'] = 'r'
-    primary_hdu.header['REF_CATA'] = 'PANSTARR'
-    primary_hdu.header['REF_FLT'] = 'g'
-    primary_hdu.header['COR_COR'] = 'Y'
-    primary_hdu.header['CAT_COR'] = 'g-r'
+    primary_hdu.header['SUV_FLT']  = cal_band
+    primary_hdu.header['REF_CATA'] = catalog
+    primary_hdu.header['REF_FLT']  = obj_band
+    primary_hdu.header['CAT_COR']  = f"{cal_band}-{obj_band}"
     source_list_clean = source_list.applymap(lambda x: x.filled(np.nan) if hasattr(x, 'filled') else x)
     detected_hdu = fits.BinTableHDU(Table.from_pandas(source_list_clean), name='DETECTED_SOURCES')
     if not source_list_clean.empty:
@@ -386,14 +354,32 @@ def cleanup_files(file_base):
 
 
 if __name__ == "__main__":
-    # Configuration
-    target_name  = "103P"
-    data_sources = "atlas_mauna_loa"
-    pixel_scale  = 1.86     # arcsec/pixel
-    snr          = 7.0      # detection threshold
 
-    input_fits, file_base, hdulist, image = load_fits_image(target_name, data_sources)
+    parser = argparse.ArgumentParser(description="Photometric calibration on a background-subtracted image.")
+    parser.add_argument("input_fits", help="Path to background-subtracted FITS image")
+    parser.add_argument("--bkg_err", type=float, required=True,
+                        help="Global background RMS (float, required)")
+    parser.add_argument("--pixel_scale", type=float, default=1.86,
+                        help="Pixel scale in arcsec/pixel (default: 1.86)")
+    parser.add_argument("--snr", type=float, default=7.0,
+                        help="Detection S/N threshold (default: 7.0)")
+    parser.add_argument("--catalog", default="PanSTARRS1",
+                        help="Photometric reference catalog (default: PanSTARRS1)")
+    parser.add_argument("--obs_band", default="g", help="Observed image bandpass (default: g)")
+    parser.add_argument("--cal_band", default="r", help="Reference catalog bandpass (default: r)")
+    args = parser.parse_args()
 
+    input_fits  = args.input_fits
+    file_base   = os.path.splitext(input_fits)[0]
+    image       = fitsio.read(input_fits).astype(np.float32)
+    bkg_err     = args.bkg_err
+    pixel_scale = args.pixel_scale
+    snr         = args.snr
+    catalog     = args.catalog
+    obs_band    = args.obs_band
+    cal_band    = args.cal_band
+ 
+    
     output_wcs = f"{file_base}.wcs"
     try:
         if run_solve_field(input_fits, output_wcs, pixel_scale):
@@ -403,33 +389,49 @@ if __name__ == "__main__":
     except Exception as e:
         raise SystemExit(f"WCS calibration failed: {e}")
 
-    source_list, telescope_image_sub = find_sources(image, snr)
+    source_list, telescope_image_sub = find_sources(image, bkg_err, snr)
     source_list, sky_coords = retrieve_sources(source_list, wcs_solution)
-    calibration = calibrate_photometry(sky_coords, source_list)
+    calibration = calibrate_photometry(
+        sky_coords,
+        source_list,
+        catalog=catalog,
+        obs_band=obs_band,
+        cal_band=cal_band,
+    )
     zp     = calibration["zp"]
     C      = calibration["C"]
     unc    = calibration["unc"]
-    g      = calibration["g"]
-    g_inst = calibration["g_inst"]
-    gmr    = calibration["gmr"]
-    objids = calibration["objids"]
+    m      = calibration["m"]
+    m_inst = calibration["m_inst"]
+    color_mags  = calibration['color_mags']
+    color_index = calibration['color_index']
+    objids      = calibration['objids']
 
     if hasattr(objids, "mask"):
         matched_idx = np.where(~objids.mask)[0]
     else:
         matched_idx = np.arange(len(source_list))
-    if hasattr(gmr, "mask"):
-        colored_idx = np.where(~gmr.mask)[0]
+    if hasattr(color_mags, "mask"):
+        colored_idx = np.where(~color_mags.mask)[0]
     else:
         colored_idx = np.arange(len(source_list))
 
-    fig1, ax1 = plot_color_correction(gmr, g, g_inst, C, zp)
+    fig1, ax1 = plot_color_correction(color_mags, m, m_inst, C, zp, color_index)
     fig2, ax2 = plot_image(telescope_image_sub, source_list, matched_idx, colored_idx)
     plt.show()
 
     create_header(
-        image, wcs_solution, zp, unc,
-        source_list, matched_idx, colored_idx, input_fits
+        image,
+        wcs_solution,
+        zp,
+        unc,
+        source_list,
+        matched_idx,
+        colored_idx,
+        input_fits,         
+        obs_band,
+        catalog,
+        cal_band,
     )
 
     cleanup_files(file_base)
