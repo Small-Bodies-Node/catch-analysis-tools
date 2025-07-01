@@ -2,7 +2,7 @@ import pytest
 import tempfile
 from unittest.mock import patch, MagicMock
 
-from astrometry import *
+from ..astrometry import *
 
 @pytest.fixture
 def synthetic_image():
