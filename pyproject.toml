@@ -18,6 +18,8 @@ dependencies = [
     "scikit-image",
     "pandas",
     "sep",
+    "fitsio",
+    "calviacat",
 ]
 dynamic = ["version"]
 
