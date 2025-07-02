@@ -20,6 +20,7 @@ dependencies = [
     "sep",
     "fitsio",
     "calviacat",
+    "mastcasjobs",
 ]
 dynamic = ["version"]
 
