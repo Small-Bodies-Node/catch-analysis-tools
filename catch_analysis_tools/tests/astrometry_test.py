@@ -37,8 +37,8 @@ def synthetic_wcs():
 ])
 
 def test_run_solve_field_conditional_execution(file_exists, should_call_run):
-    with patch("astrometry.os.path.exists", return_value=file_exists) as mock_exists, \
-         patch("astrometry.subprocess.run") as mock_run:
+    with patch("catch_analysis_tools.astrometry.os.path.exists", return_value=file_exists) as mock_exists, \
+         patch("catch_analysis_tools.astrometry.subprocess.run") as mock_run:
         
         result = run_solve_field("input.fits", "output.wcs", pixel_scale=2.0)
 
@@ -51,8 +51,8 @@ def test_run_solve_field_conditional_execution(file_exists, should_call_run):
 
 
 def test_run_solve_field_raises_if_subprocess_fails():
-    with patch("astrometry.os.path.exists", return_value=False), \
-         patch("astrometry.subprocess.run", side_effect=subprocess.CalledProcessError(1, "solve-field")):
+    with patch("catch_analysis_tools.astrometry.os.path.exists", return_value=False), \
+         patch("catch_analysis_tools.astrometry.subprocess.run", side_effect=subprocess.CalledProcessError(1, "solve-field")):
         with pytest.raises(RuntimeError, match="solve-field failed"):
             run_solve_field("input.fits", "output.wcs", pixel_scale=1.5)
 
@@ -92,7 +92,7 @@ def test_calibrate_photometry():
     mock_cat.search.return_value = (np.arange(3),)
     mock_cat.xmatch.return_value = (np.array([1, 2, 3]), np.array([0.1, 0.2, 0.3]))
     mock_cat.cal_color.return_value = (25.0, 0.05, 0.01, np.array([20.1, 20.2, 20.3]), np.array([0.3, 0.2, 0.1]), None)
-    with patch("astrometry.cvc") as mock_cvc:
+    with patch("catch_analysis_tools.astrometry.cvc") as mock_cvc:
         mock_cvc.PanSTARRS1.return_value = mock_cat
         result = calibrate_photometry(coords, df)
     assert result['zp'] == 25.0 and len(result['m']) == 3
