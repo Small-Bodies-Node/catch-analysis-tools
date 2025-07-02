@@ -17,6 +17,7 @@ dependencies = [
     "matplotlib",
     "scikit-image",
     "pandas",
+    "sep",
 ]
 dynamic = ["version"]
 
