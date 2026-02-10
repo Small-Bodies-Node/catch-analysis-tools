@@ -2,6 +2,6 @@ prune build
 prune docs/_build
 prune docs/api
 prune docker
-prune requirements*txt
-prune _*
+recursive-exclude requirements*txt
+recursive-exclude _*
 global-exclude *.pyc *.o
