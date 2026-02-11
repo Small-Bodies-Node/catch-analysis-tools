@@ -12,9 +12,10 @@ RUN apt-get update && apt-get install -y \
 
 RUN pip install -U pip setuptools wheel
 
-COPY dist /app/dist
 COPY requirements.local.txt .
 RUN pip install -r requirements.local.txt
+
+COPY dist /app/dist
 RUN pip install --find-links dist catch_analysis_tools
 
 # Checkout code

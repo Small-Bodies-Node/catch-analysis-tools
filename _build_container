@@ -45,7 +45,7 @@ fi
 project_dir="$(pwd)"
 deployment=${TF_VAR_CAT_DEPLOYMENT}
 
-package_cmd="python3 -m build"
+package_cmd="python3 -m build --wheel"
 build_cmd="docker build --platform ${build_platform} --build-arg CAT_DEPLOYMENT=\"${deployment}\" --tag \"${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_TAG}\" --file docker/Dockerfile.${deployment} ."
 #run_cmd="docker run --rm --memory=4g --platform ${build_platform} --volume \"${project_dir}:/app\" \"${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_TAG}\" /app/docker/run.sh"
 
