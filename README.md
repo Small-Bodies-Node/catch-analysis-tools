@@ -29,9 +29,14 @@ tox -l
 
 The CAT may be run as a containerized service, hosted locally or by AWS Fargate.
 
+Requires: Docker
+
 ### Local
 
 Running locally will install the currently checked out version of the CAT.
+
+Requirements:
+- python3 with the "build" module: `pip install build`
 
 1. Copy env-template to .env and edit.
     a. Set TF_VAR_CAT_DEPLOYMENT to "local"
