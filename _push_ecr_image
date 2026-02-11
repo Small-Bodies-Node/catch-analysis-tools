@@ -32,7 +32,7 @@ highlight() {
 # shellcheck disable=SC1091
 source .env
 
-required_vars=(DOCKER_IMAGE_NAME TF_VAR_DOCKER_IMAGE_TAG)
+required_vars=(DOCKER_IMAGE_NAME DOCKER_IMAGE_TAG)
 for var in "${required_vars[@]}"; do
   if [[ -z "${!var:-}" ]]; then
     echo "${var} must be set in .env" >&2
@@ -46,7 +46,7 @@ if [[ -z "${aws_region}" ]]; then
   exit 1
 fi
 
-image_tag="${TF_VAR_DOCKER_IMAGE_TAG}"
+image_tag="${DOCKER_IMAGE_TAG}"
 local_image="${DOCKER_IMAGE_NAME}:${image_tag}"
 
 ecr_repository_url="$(tofu output -raw ecr_repository_url)"

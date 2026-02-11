@@ -1,4 +1,4 @@
-FROM python:3.14-slim-trixie
+FROM python:3.12-slim
 
 # Set working directory
 WORKDIR /app
@@ -8,14 +8,17 @@ RUN apt-get update && apt-get install -y \
   netcat-openbsd \
   git \
   wget \
-  build-essential
+  build-essential \
+  zlib1g-dev \
+  libbz2-dev \
+  && rm -rf /var/lib/apt/lists/*
 
-RUN pip install -U pip setuptools wheel
+RUN pip install -U pip setuptools wheel "connexion[flask,swagger-ui,uvicorn]"
 
-COPY dist /app/dist
+COPY . /app
+RUN pip install /app
 COPY requirements.local.txt .
 RUN pip install -r requirements.local.txt
-#RUN pip install --find-links dist catch_analysis_tools
 
 
 # Checkout code
@@ -37,5 +40,6 @@ RUN pip install -r requirements.local.txt
 # # Install dependencies
 # #RUN pip install -r requirements.local.txt;
 
-# # Install code
-# RUN pip install 
+EXPOSE 8000
+
+CMD ["python3", "-m", "catch_analysis_tools.app.app"]

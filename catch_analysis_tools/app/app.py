@@ -71,4 +71,4 @@ if __name__ == "__main__":
     # for development
     #logger.info("Running " + ENV.APP_NAME)
     #logger.info(application.url_map)
-    app.run()#"catch_analysis_tools.app:app")#, host=ENV.API_HOST, port=ENV.API_PORT)
+    app.run(host="0.0.0.0", port=8000)#"catch_analysis_tools.app:app")#, host=ENV.API_HOST, port=ENV.API_PORT)
