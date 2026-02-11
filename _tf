@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+set -euo pipefail
+IFS=$'\n\t'
+
+print_help() {
+  cat <<'EOF'
+Terraform / OpenTofu Command Guide
+==================================
+
+Before running commands:
+  source .env
+
+Core workflow:
+  tofu init
+  tofu plan
+  tofu apply
+
+After apply (inspect outputs):
+  tofu output
+  tofu output -raw api_gateway_url   # Endpoint URL
+
+Managing infrastructure:
+  tofu state list                    # Show current resources
+  tofu destroy                       # Delete infrastructure
+
+Other useful commands:
+  tofu plan -destroy
+  tofu fmt
+  tofu providers schema
+EOF
+}
+
+if [[ ! -f ".env" ]]; then
+  echo "Missing .env file. Copy .env-template and configure required values." >&2
+  exit 1
+fi
+
+# shellcheck disable=SC1091
+source .env
+
+if [[ $# -eq 0 ]]; then
+  print_help
+  exit 0
+fi
+
+if ! command -v tofu >/dev/null 2>&1; then
+  echo "OpenTofu (tofu) is not installed or not in PATH." >&2
+  exit 1
+fi
+
+echo "Running: tofu $*"
+exec tofu "$@"
