@@ -3,6 +3,18 @@ info:
   title: Catch Analysis Tools
   version: 0.0.1
 paths:
+  /hello:
+    get:
+      operationId: catch_analysis_tools.app.services.health.hello
+      summary: Basic service liveness endpoint.
+      responses:
+        "200":
+          description: Service is alive.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Hello, World!
   /source_instr_mag:
     post:
       operationId: catch_analysis_tools.app.services.photometry.source_instr_mag
