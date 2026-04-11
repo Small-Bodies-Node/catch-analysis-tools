@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+#
+# Push the locally built image to the ECR repository created by Terraform/OpenTofu.
+
+set -euo pipefail
+IFS=$'\n\t'
+
+if [[ ! -f ".env" ]]; then
+  echo "Missing .env file. Copy .env-template and configure required values." >&2
+  exit 1
+fi
+
+if ! command -v aws >/dev/null 2>&1; then
+  echo "aws CLI not found. Install AWS CLI and try again." >&2
+  exit 1
+fi
+
+if ! command -v docker >/dev/null 2>&1; then
+  echo "docker command not found. Install Docker and try again." >&2
+  exit 1
+fi
+
+if ! command -v tofu >/dev/null 2>&1; then
+  echo "OpenTofu (tofu) is not installed or not in PATH." >&2
+  exit 1
+fi
+
+highlight() {
+  printf '\033[1;36m%s\033[0m\n' "$1"
+}
+
+# shellcheck disable=SC1091
+source .env
+
+required_vars=(DOCKER_IMAGE_NAME DOCKER_IMAGE_TAG)
+for var in "${required_vars[@]}"; do
+  if [[ -z "${!var:-}" ]]; then
+    echo "${var} must be set in .env" >&2
+    exit 1
+  fi
+done
+
+aws_region="${AWS_REGION:-${TF_VAR_AWS_REGION:-}}"
+if [[ -z "${aws_region}" ]]; then
+  echo "Either AWS_REGION or TF_VAR_AWS_REGION must be set in .env" >&2
+  exit 1
+fi
+
+image_tag="${DOCKER_IMAGE_TAG}"
+local_image="${DOCKER_IMAGE_NAME}:${image_tag}"
+
+ecr_repository_url="$(tofu output -raw ecr_repository_url)"
+if [[ -z "${ecr_repository_url}" ]]; then
+  echo "Failed to resolve ecr_repository_url from tofu output." >&2
+  exit 1
+fi
+
+ecr_registry="${ecr_repository_url%%/*}"
+remote_image="${ecr_repository_url}:${image_tag}"
+
+# This uses IAM credentials to fetch a short-lived ECR auth token for Docker.
+login_cmd="aws ecr get-login-password --region ${aws_region} | docker login --username AWS --password-stdin ${ecr_registry}"
+tag_cmd="docker tag \"${local_image}\" \"${remote_image}\""
+push_cmd="docker push \"${remote_image}\""
+
+echo "The .env file has been sourced. Do you wish to proceed with these commands:"
+highlight "${login_cmd}"
+highlight "${tag_cmd}"
+highlight "${push_cmd}"
+echo
+
+read -r -p "Continue? [y/N] " confirmation
+case "${confirmation}" in
+  [Yy]|[Yy][Ee][Ss]) ;;
+  *) echo "Aborted."; exit 0 ;;
+esac
+
+highlight "Executing ECR login"
+aws ecr get-login-password --region "${aws_region}" | docker login --username AWS --password-stdin "${ecr_registry}"
+
+highlight "Executing: ${tag_cmd}"
+docker tag "${local_image}" "${remote_image}"
+
+highlight "Executing: ${push_cmd}"
+docker push "${remote_image}"
+
+echo "Image pushed successfully: ${remote_image}"
