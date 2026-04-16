@@ -8,7 +8,6 @@ info:
     Use the example payload below to quickly test with a known FITS image.
 
 paths:
-  /astrometry:
   /hello:
     get:
       operationId: catch_analysis_tools.app.services.health.hello
@@ -21,7 +20,7 @@ paths:
               schema:
                 type: string
                 example: Hello, World!
-  /source_instr_mag:
+  /astrometry:
     post:
       tags:
         - Astrometry
@@ -150,12 +149,10 @@ paths:
         "200":
           description: JSON results or PNG plot image.
           content:
-
             application/json:
               schema:
                 type: object
                 properties:
-
                   photometry:
                     type: object
                     properties:
