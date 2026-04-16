@@ -10,7 +10,15 @@ Get required packages useful for testing:
 pip install .[tests]
 ```
 
-Running the tests:
+### Running the webapp (without Docker)
+
+```
+python3 -m catch_analysis_tools.app.app
+```
+
+Then to see the Swagger documentation, open up http://localhost:8000/ui (see command output for exact port).
+
+### Running the test suite
 
 ```
 tox -e py312-test
