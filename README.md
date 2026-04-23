@@ -1,4 +1,4 @@
-# CATCH Analysis Tools
+rovide the newly added section in code formatr# CATCH Analysis Tools
 
 Data analysis tools for CATCH, an astronomical survey search tool
 
@@ -53,3 +53,39 @@ Running locally will install the currently checked out version of the CAT.
   - Update tf state with `./_tf apply`
 - I also made some changes adding a /hello route, and wiring up the flask code to get it to work
 - Added a simple script to ping the endpoint created by tf, `./_ping_endpoint`
+
+
+## Astrometry Configuration 
+
+The astrometric calibration pipeline depends on **astrometry.net** index files and a corresponding configuration file. These are required for WCS solving.
+
+### 1. Install system dependencies
+```
+sudo apt install astrometry.net netpbm
+```
+
+### 2. Download astrometry index files
+```
+mkdir -p ~/.astrometry/data
+
+for i in 00 01 02 03 04 05 06 07; do
+  wget -P ~/.astrometry/data \
+    https://portal.nersc.gov/project/cosmo/temp/dstn/index-5200/index-5204-$i.fits
+done
+
+```
+Note: These files are required and may take time to download (~GB total).
+
+### 3. Create astrometry configuration file
+```
+mkdir -p ~/.astrometry
+: > ~/.astrometry/config
+
+for f in ~/.astrometry/data/index-*.fits; do
+  echo "index $f" >> ~/.astrometry/config
+done
+```
+### 4. Set required environment variable
+```
+export ASTROMETRY_CONFIG=$HOME/.astrometry/config
+```
