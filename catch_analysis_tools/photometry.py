@@ -10,7 +10,7 @@ from astropy.convolution import convolve
 from astropy.coordinates import SkyCoord, ICRS
 from astropy.wcs import WCS
 from photutils.aperture import aperture_photometry, CircularAnnulus, CircularAperture
-from photutils.centroids import centroid_quadratic, centroid_sources, centroid_com
+from photutils.centroids import centroid_quadratic, centroid_sources
 from astropy import units as u
 
 # here are functions for grabbing the data, doing background subtractions and manipulating source extractions
@@ -141,7 +141,7 @@ def subpixel_centroid(user_point,data,radius):
 
     footprint = circular_footprint(radius)
     x, y = centroid_sources(data, user_point[0], user_point[1], footprint=footprint,
-                            centroid_func=centroid_com)
+                            centroid_func=centroid_quadratic)
     
     target_position = np.array([x[0],y[0]])
     return target_position
@@ -229,7 +229,7 @@ def load_thumbnail(url):
     img_WCS = WCS(header)
     return data, header, img_WCS
 
-def get_pixel_WCS(img_WCS,pixel):
+def get_pixel_WCS(img_WCS,ra,dec):
     """Retrieve WCS location of a pixel given its (x,y) position
 
     Parameters
@@ -248,10 +248,11 @@ def get_pixel_WCS(img_WCS,pixel):
          Astropy SkyCoord location of desired pixel
     """
     
-    loc = img_WCS.pixel_to_world(pixel[0],pixel[1])
+    loc = img_WCS.pixel_to_world(ra,dec)
+    print(loc.ra.deg)
     return loc
 
-def get_WCS_pixel(img_WCS,ra_dec):
+def get_WCS_pixel(img_WCS,ra,dec):
     """Retrieve pixel location at a given (RA, Dec) sky coordinate position
 
     Parameters
@@ -270,7 +271,7 @@ def get_WCS_pixel(img_WCS,ra_dec):
          Pixel location of specified (RA, Dec)
     """
 
-    sky_loc = SkyCoord(ICRS(ra=ra_dec[0]*u.deg, dec=ra_dec[1]*u.deg))
+    sky_loc = SkyCoord(ICRS(ra=ra*u.deg, dec=dec*u.deg))
     loc = img_WCS.world_to_pixel(sky_loc)
     return loc
     
@@ -341,7 +342,10 @@ def calibrated_mag(instr_mag_array,zero_point,zero_point_uncert):
     calib_mag = zero_point+instr_mag_array[0]
     calib_mag_hi = np.sqrt(np.square(zero_point_uncert) + np.square(instr_mag_array[1]))
     calib_mag_lo = np.sqrt(np.square(zero_point_uncert) + np.square(instr_mag_array[2]))
-    
-    calib_mag_array = np.array([calib_mag,calib_mag_hi,calib_mag_lo])
+    calib_mag_array = {
+        "cal_mag": calib_mag,
+        "cal_mag_hi_uncert": calib_mag_hi,
+        "cal_mag_lo_uncert": calib_mag_lo
+    }
     return calib_mag_array    
 

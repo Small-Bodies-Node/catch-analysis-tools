@@ -200,3 +200,230 @@ paths:
 
         "500":
           description: Internal server error
+  /subtract_median_background:
+    post:
+      operationId: catch_analysis_tools.app.services.subtract_median_background.perform_median_subtraction
+      summary: "Compute the median background with source masking, saving the background-subtracted image as a new FITS file."
+      parameters:
+        - name: url
+          in: query
+          description: "Cutout URL from CATCH query"
+          example: "https://sbnsurveys.astro.umd.edu/api/images/urn:nasa:pds:gbo.ast.atlas.survey.258:59185:01a59185o0401o.fits?ra=13.46483&dec=15.80546&size=0.16deg&format=fits"
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Background-subtracted image saved as a new FITS file.
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Path to the background-subtracted FITS file.
+                properties:
+                  background_subtracted_image_path:
+                    description: Path to the background-subtracted FITS file.
+                    type: string
+  /do_default_photometry:
+    post:
+      operationId: catch_analysis_tools.app.services.photometry.default_extraction
+      summary: "Perform a basic (circular aperture, background annulus centered on target) extraction on source nearest to target ephemeris location"
+      parameters:
+        - name: filebase
+          in: query
+          description: "Base filename (without .fits or .wcs extension) taken from CATCH-generated query URL."
+          example: "65P_atlas_haleakela"
+          required: true
+          schema:
+            type: string
+        - name: target_ra
+          in: query
+          description: "Target Right Ascension ephemeris location, to be used as initial guess for the object."
+          example: "39.60040"
+          required: true
+          schema:
+            type: number
+        - name: target_dec
+          in: query
+          description: "Target Declination ephemeris location, to be used as initial guess for the object."
+          example: "10.07014"
+          required: true
+          schema:
+            type: number
+        - name: search_radius
+          in: query
+          description: "Radius in pixels of search area (centered on (target_ra,target_dec) ) for centroiding."
+          example: "7"
+          required: true
+          schema:
+            type: number
+        - name: aperture_size
+          in: query
+          description: "Radius (in pixels) for source flux extraction aperture."
+          example: "7"
+          required: true
+          schema:
+            type: number
+        - name: an_in
+          in: query
+          description: "Radius (in pixels) for inner edge of annulus for background subtraction, centered on target."
+          example: "7"
+          required: true
+          schema:
+            type: number
+        - name: an_out
+          in: query
+          description: "Radius (in pixels) for outer edge of annulus for background subtraction, centered on target."
+          example: "15"
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Calibrated magnitude array from chosen aperture photometry settings, and output plot showing the aperture on the cutout
+          content:
+            application/json:
+              schema:
+                type: array
+                description: Magnitude from source flux with asymmetric uncertainties.
+                items:
+                  type: object
+                  description: Output from photometry.centroid_location(). Array containing search input parameters (initial guess, search radius) and final centroided location.
+                  properties:
+                    search_results:
+                      description: Array of input search parameters and output centroid
+                    centroid_figure:
+                      description: Location of figure showing centroid search
+                  type: object
+                  description: Output from photometry.calibrated_mag(). Array containing source CALIBRATED magnitude and uncertainties, as [Magnitude, Upper Magnitude Uncertainty, Lower Magnitude Uncertainty].
+                  properties:
+                    cal_mag:
+                      description: Calibrated magnitude
+                      type: number
+                    cal_mag_hi_uncert:
+                      description: Upper uncertainty on calibrated magnitude
+                      type: number
+                    cal_mag_lo_uncert:
+                      description: Lower uncertainty on calibrated magnitude
+                      type: number
+                  type: object
+                  description: Cutout image with aperture
+                  properties:
+                    aperture_figure:
+                      description: Output plot showing the default aperture + annulus extraction onto the cutout image.
+                      type: string
+                  type: object
+                  description: Output from photometry.centroid_location(). Array containing search input parameters (initial guess, search radius) and final centroided location.
+                  properties:
+                    init_guess_x:
+                      description: x pixel coordinate of guess
+                      type: number
+                    init_guess_y:
+                      description: y pixel coordinate of guess
+                      type: number
+                    init_guess_RA:
+                      description: RA value of guess
+                      type: number
+                    init_guess_Dec:
+                      description: Dec value of guess
+                      type: number
+                    search_radius:
+                      description: Radius in pixels for source search
+                      type: number
+                    cent_x:
+                      description: x pixel coordinate of centroided source
+                      type: number
+                    cent_y:
+                      description: y pixel coordinate of centroided source
+                      type: number
+                    cent_RA:
+                      description: RA value of centroided source
+                      type: number
+                    cent_Dec:
+                      description: Dec value of centroided source
+                      type: number
+                  type: object
+                  description: Cutout image showing selected target centroid in the cutout image.
+                  properties:
+                    centroid_figure:
+                      description: Location of centroid plot.
+                      type: string
+  /get_centroided_target_location:
+    post:
+      operationId: catch_analysis_tools.app.services.photometry.centroid_location
+      summary: "Find nearest target centroid to a user-specified point, with user-specified search radius."
+      parameters:
+        - name: filebase
+          in: query
+          description: "Base filename (without .fits or .wcs extension) taken from CATCH-generated query URL."
+          example: "65P_atlas_haleakela"
+          required: true
+          schema:
+            type: string
+        - name: target_ra
+          in: query
+          description: "Target pixel RA value, to be used as initial guess for the object."
+          example: "39.60040"
+          required: true
+          schema:
+            type: number
+        - name: target_dec
+          in: query
+          description: "Target pixel Dec value, to be used as initial guess for the object."
+          example: "10.07014"
+          required: true
+          schema:
+            type: number
+        - name: search_radius
+          in: query
+          description: "Radius in pixels of search area (centered on (target_x,target_y) ) for centroiding."
+          example: "7"
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Calibrated magnitude array from chosen aperture photometry settings, and output plot showing the aperture on the cutout
+          content:
+            application/json:
+              schema:
+                type: array
+                description: Magnitude from source flux with asymmetric uncertainties.
+                items:
+                  type: object
+                  description: Output from photometry.centroid_location(). Array containing search input parameters (initial guess, search radius) and final centroided location.
+                  properties:
+                    init_guess_x:
+                      description: x pixel coordinate of guess
+                      type: number
+                    init_guess_y:
+                      description: y pixel coordinate of guess
+                      type: number
+                    init_guess_ra:
+                      description: RA value of guess
+                      type: number
+                    init_guess_dec:
+                      description: Dec value of guess
+                      type: number
+                    search_radius:
+                      description: Radius in pixels for source search
+                      type: number
+                    cent_x:
+                      description: x pixel coordinate of centroided source
+                      type: number
+                    cent_y:
+                      description: y pixel coordinate of centroided source
+                      type: number
+                    cent_RA:
+                      description: RA value of centroided source
+                      type: number
+                    cent_Dec:
+                      description: Dec value of centroided source
+                      type: number
+                  type: object
+                  description: Cutout image showing selected target centroid in the cutout image.
+                  properties:
+                    centroid_figure:
+                      description: Location of centroid plot.
+                      type: string
+                      
