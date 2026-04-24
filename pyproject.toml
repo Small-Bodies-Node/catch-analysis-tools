@@ -10,7 +10,7 @@ authors = [
 ]
 license = "BSD-3-Clause"
 dependencies = [
-    "numpy>=2.0, <=2.2",
+    "numpy>=2.0",
     "astropy>=7.1.2",
     "photutils",
     "scipy",
