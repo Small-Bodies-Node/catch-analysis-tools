@@ -12,11 +12,13 @@ pip install .[tests]
 
 ### Running the webapp (without Docker)
 
+With the package and its dependencies installed as above, the app may be started with the command:
+
 ```
 python3 -m catch_analysis_tools.app.app
 ```
 
-Then to see the Swagger documentation, open up http://localhost:8000/ui (see command output for exact port).
+Then, to view the Swagger documentation, open up http://localhost:8000/ui (see command output for exact port).
 
 ### Running the test suite
 
