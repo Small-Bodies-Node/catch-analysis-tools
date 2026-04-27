@@ -1,4 +1,4 @@
-rovide the newly added section in code formatr# CATCH Analysis Tools
+# CATCH Analysis Tools
 
 Data analysis tools for CATCH, an astronomical survey search tool
 
