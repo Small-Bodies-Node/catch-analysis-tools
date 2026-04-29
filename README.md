@@ -1,4 +1,4 @@
-rovide the newly added section in code formatr# CATCH Analysis Tools
+# CATCH Analysis Tools
 
 Data analysis tools for CATCH, an astronomical survey search tool
 
@@ -10,7 +10,17 @@ Get required packages useful for testing:
 pip install .[tests]
 ```
 
-Running the tests:
+### Running the webapp (without Docker)
+
+With the package and its dependencies installed as above, the app may be started with the command:
+
+```
+python3 -m catch_analysis_tools.app.app
+```
+
+Then, to view the Swagger documentation, open up http://localhost:8000/ui (see command output for exact port).
+
+### Running the test suite
 
 ```
 tox -e py312-test
