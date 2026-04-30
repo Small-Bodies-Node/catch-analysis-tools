@@ -4,5 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     image: "${DOCKER_IMAGE_NAME:-sbn-cat}:${DOCKER_IMAGE_TAG:-local}"
+    environment:
+      DOCKER_IMAGE_TAG: "${DOCKER_IMAGE_TAG:-local}"
     ports:
       - "8000:8000"

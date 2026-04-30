@@ -3,12 +3,15 @@ import requests
 import os
 import subprocess
 import pandas as pd
+import json
+import logging
 import sep
 import fitsio
 import matplotlib
 matplotlib.use("Agg")
 import io
 import base64
+from uuid import uuid4
 import matplotlib.pyplot as plt
 from astropy.io import fits
 from astropy.wcs import WCS
@@ -20,6 +23,16 @@ from tempfile import NamedTemporaryFile
 from flask import Response
 from copy import deepcopy
 import calviacat as cvc
+
+from catch_analysis_tools.app.services import astrometry_data
+
+
+logger = logging.getLogger(__name__)
+
+
+class AstrometrySolveError(RuntimeError):
+    pass
+
 
 DEFAULT_CONFIG = {
     "wcs": {
@@ -110,6 +123,11 @@ def run_solve_field(input_fits, output_wcs, wcs_cfg):
     ]
 
     subprocess.run(command, check=True)
+    if not os.path.exists(output_wcs):
+        raise AstrometrySolveError(
+            f"solve-field did not produce a WCS solution: {output_wcs}"
+        )
+    return True
 
 
 def find_sources(image, det_cfg):
@@ -607,41 +625,93 @@ def validate_and_normalize(body: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def do_astrometry(body: Dict[str, Any]):
+    if not astrometry_data.is_ready():
+        payload = {
+            "status": "not_ready",
+            "message": "Astrometry index files are not ready yet.",
+            "astrometry_data": astrometry_data.get_status(),
+        }
+        return Response(
+            json.dumps(payload),
+            status=503,
+            mimetype="application/json",
+            headers={"Retry-After": "30"},
+        )
 
-    # --- Validate + normalize ---
-    cfg = validate_and_normalize(body)
+    request_id = uuid4().hex[:12]
+    stage = "validate_request"
+    image_url = body.get("image_url")
+    return_plot = body.get("return_plot")
+    plot_type = body.get("plot_type")
 
-    image_url = cfg["image_url"]
-    return_plot = cfg["meta"]["return_plot"]
-    plot_type = cfg["meta"]["plot_type"]
-
-    # --- Fetch FITS ---
     try:
-        response = requests.get(image_url, timeout=60)
-        response.raise_for_status()
-    except requests.RequestException:
-        raise BadRequest("Could not retrieve FITS image")
+        # --- Validate + normalize ---
+        cfg = validate_and_normalize(body)
 
-    with NamedTemporaryFile(suffix=".fits", delete=False) as tmp:
-        tmp.write(response.content)
-        tmp_path = tmp.name
+        image_url = cfg["image_url"]
+        return_plot = cfg["meta"]["return_plot"]
+        plot_type = cfg["meta"]["plot_type"]
 
-    try:
-        # --- Run pipeline ---
-        results = run_pipeline(tmp_path, cfg)
+        # --- Fetch FITS ---
+        stage = "fetch_fits"
+        try:
+            response = requests.get(image_url, timeout=60)
+            response.raise_for_status()
+        except requests.RequestException:
+            raise BadRequest("Could not retrieve FITS image")
 
-        # --- Return plot ---
-        if return_plot:
-            if plot_type not in results.get("plots", {}):
-                raise BadRequest(f"Unknown plot_type: {plot_type}")
+        stage = "write_temp_fits"
+        with NamedTemporaryFile(suffix=".fits", delete=False) as tmp:
+            tmp.write(response.content)
+            tmp_path = tmp.name
 
-            image_bytes = base64.b64decode(results["plots"][plot_type])
-            return Response(image_bytes, mimetype="image/png")
+        try:
+            # --- Run pipeline ---
+            stage = "run_pipeline"
+            results = run_pipeline(tmp_path, cfg)
 
-        return results, 200, {"Content-Type": "application/json"}
+            # --- Return plot ---
+            stage = "build_response"
+            if return_plot:
+                if plot_type not in results.get("plots", {}):
+                    raise BadRequest(f"Unknown plot_type: {plot_type}")
 
-    finally:
-        os.remove(tmp_path)
+                image_bytes = base64.b64decode(results["plots"][plot_type])
+                return Response(image_bytes, mimetype="image/png")
+
+            return results, 200, {"Content-Type": "application/json"}
+
+        finally:
+            os.remove(tmp_path)
+    except BadRequest:
+        raise
+    except AstrometrySolveError as exc:
+        logger.warning(
+            "Astrometry solve did not produce WCS "
+            "[request_id=%s stage=%s image_url=%r return_plot=%r plot_type=%r]",
+            request_id,
+            stage,
+            image_url,
+            return_plot,
+            plot_type,
+        )
+        payload = {
+            "status": "solve_failed",
+            "message": str(exc),
+            "request_id": request_id,
+        }
+        return Response(json.dumps(payload), status=422, mimetype="application/json")
+    except Exception:
+        logger.exception(
+            "Astrometry request failed "
+            "[request_id=%s stage=%s image_url=%r return_plot=%r plot_type=%r]",
+            request_id,
+            stage,
+            image_url,
+            return_plot,
+            plot_type,
+        )
+        raise
 
 
 # ## when testing the code locally

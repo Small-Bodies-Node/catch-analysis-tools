@@ -12,4 +12,5 @@ sep
 fitsio
 calviacat
 mastcasjobs
+beautifulsoup4
 connexion[flask,swagger-ui,uvicorn]

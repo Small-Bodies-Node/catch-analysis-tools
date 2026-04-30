@@ -22,3 +22,8 @@ output "ecs_service_name" {
   description = "ECS service name"
   value       = aws_ecs_service.app.name
 }
+
+output "efs_file_system_id" {
+  description = "EFS file system ID used to persist astrometry index files"
+  value       = aws_efs_file_system.astrometry_data.id
+}

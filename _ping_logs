@@ -1,0 +1,215 @@
+#!/usr/bin/env bash
+#
+# Resolve ECS/CloudWatch details from OpenTofu outputs and print a useful
+# debugging snapshot for the deployed Fargate service.
+
+set -euo pipefail
+IFS=$'\n\t'
+
+messages_only=false
+
+print_help() {
+  cat <<'EOF'
+Usage: ./_ping_logs [--messages-only]
+
+Options:
+  --messages-only  In the CloudWatch log section, print only log message text.
+  -h, --help       Show this help.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --messages-only)
+      messages_only=true
+      shift
+      ;;
+    -h|--help)
+      print_help
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      print_help >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [[ ! -f ".env" ]]; then
+  echo "Missing .env file. Copy .env-template and configure required values." >&2
+  exit 1
+fi
+
+if ! command -v tofu >/dev/null 2>&1; then
+  echo "OpenTofu (tofu) is not installed or not in PATH." >&2
+  exit 1
+fi
+
+if ! command -v aws >/dev/null 2>&1; then
+  echo "aws CLI not found. Install AWS CLI and try again." >&2
+  exit 1
+fi
+
+# shellcheck disable=SC1091
+source .env
+
+unset AWS_PROFILE AWS_DEFAULT_PROFILE
+export AWS_PAGER=""
+
+aws_region="${AWS_REGION:-${TF_VAR_AWS_REGION:-}}"
+if [[ -z "${aws_region}" ]]; then
+  echo "Either AWS_REGION or TF_VAR_AWS_REGION must be set in .env" >&2
+  exit 1
+fi
+
+service_base_url="$(tofu output -raw service_base_url)"
+ecs_cluster_name="$(tofu output -raw ecs_cluster_name)"
+ecs_service_name="$(tofu output -raw ecs_service_name)"
+
+if [[ -z "${service_base_url}" || -z "${ecs_cluster_name}" || -z "${ecs_service_name}" ]]; then
+  echo "Failed to resolve one or more OpenTofu outputs." >&2
+  exit 1
+fi
+
+current_task_definition="$(
+  aws ecs describe-services \
+    --region "${aws_region}" \
+    --cluster "${ecs_cluster_name}" \
+    --services "${ecs_service_name}" \
+    --query 'services[0].taskDefinition' \
+    --output text
+)"
+
+current_image="$(
+  aws ecs describe-task-definition \
+    --region "${aws_region}" \
+    --task-definition "${current_task_definition}" \
+    --query 'taskDefinition.containerDefinitions[0].image' \
+    --output text
+)"
+
+log_group="$(
+  aws ecs describe-task-definition \
+    --region "${aws_region}" \
+    --task-definition "${current_task_definition}" \
+    --query 'taskDefinition.containerDefinitions[0].logConfiguration.options."awslogs-group"' \
+    --output text
+)"
+
+section() {
+  printf '\n=== %s ===\n' "$1"
+}
+
+print_command() {
+  printf 'Executing:\n%s\n\n' "$1"
+}
+
+describe_tasks() {
+  local desired_status="$1"
+  local max_results="$2"
+  local -a task_arns=()
+
+  while IFS= read -r task_arn; do
+    task_arns+=("${task_arn}")
+  done < <(
+    aws ecs list-tasks \
+      --region "${aws_region}" \
+      --cluster "${ecs_cluster_name}" \
+      --desired-status "${desired_status}" \
+      --max-results "${max_results}" \
+      --query 'taskArns[]' \
+      --output text | tr '\t' '\n' | sed '/^$/d'
+  )
+
+  if [[ "${#task_arns[@]}" -eq 0 ]]; then
+    echo "No ${desired_status} tasks found."
+    return 0
+  fi
+
+  aws ecs describe-tasks \
+    --region "${aws_region}" \
+    --cluster "${ecs_cluster_name}" \
+    --tasks "${task_arns[@]}" \
+    --query 'sort_by(tasks,&createdAt)[].{
+      task: taskArn,
+      taskDefinition: taskDefinitionArn,
+      lastStatus: lastStatus,
+      desiredStatus: desiredStatus,
+      healthStatus: healthStatus,
+      createdAt: createdAt,
+      startedAt: startedAt,
+      stoppedAt: stoppedAt,
+      stoppedReason: stoppedReason,
+      stopCode: stopCode,
+      exitCode: containers[0].exitCode,
+      containerReason: containers[0].reason
+    }' \
+    --output table
+}
+
+section "Context"
+echo "Service URL: ${service_base_url}"
+echo "AWS region: ${aws_region}"
+echo "ECS cluster: ${ecs_cluster_name}"
+echo "ECS service: ${ecs_service_name}"
+echo "Task definition: ${current_task_definition}"
+echo "Image: ${current_image}"
+echo "Log group: ${log_group}"
+
+section "Service Summary"
+print_command "aws ecs describe-services --region ${aws_region} --cluster ${ecs_cluster_name} --services ${ecs_service_name}"
+aws ecs describe-services \
+  --region "${aws_region}" \
+  --cluster "${ecs_cluster_name}" \
+  --services "${ecs_service_name}" \
+  --query 'services[0].{
+    status: status,
+    desiredCount: desiredCount,
+    runningCount: runningCount,
+    pendingCount: pendingCount,
+    taskDefinition: taskDefinition,
+    healthCheckGracePeriodSeconds: healthCheckGracePeriodSeconds,
+    deployments: deployments[].{
+      status: status,
+      taskDefinition: taskDefinition,
+      desired: desiredCount,
+      running: runningCount,
+      pending: pendingCount,
+      failed: failedTasks,
+      rolloutState: rolloutState,
+      rolloutStateReason: rolloutStateReason
+    }
+  }' \
+  --output json
+
+section "Recent Service Events"
+print_command "aws ecs describe-services --region ${aws_region} --cluster ${ecs_cluster_name} --services ${ecs_service_name} --query services[0].events[0:10]"
+aws ecs describe-services \
+  --region "${aws_region}" \
+  --cluster "${ecs_cluster_name}" \
+  --services "${ecs_service_name}" \
+  --query 'services[0].events[0:10].[createdAt,message]' \
+  --output table
+
+section "Running Tasks"
+print_command "aws ecs list-tasks --region ${aws_region} --cluster ${ecs_cluster_name} --desired-status RUNNING"
+describe_tasks "RUNNING" 10
+
+section "Recent Stopped Tasks"
+print_command "aws ecs list-tasks --region ${aws_region} --cluster ${ecs_cluster_name} --desired-status STOPPED"
+describe_tasks "STOPPED" 10
+
+section "Recent Container Logs"
+if [[ "${messages_only}" == true ]]; then
+  print_command "aws logs tail ${log_group} --region ${aws_region} --since 15m | sed -E 's/^[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]//'"
+  aws logs tail "${log_group}" \
+    --region "${aws_region}" \
+    --since 15m \
+    | sed -E 's/^[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]//'
+else
+  print_command "aws logs tail ${log_group} --region ${aws_region} --since 15m"
+  aws logs tail "${log_group}" \
+    --region "${aws_region}" \
+    --since 15m
+fi
