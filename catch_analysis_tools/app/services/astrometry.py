@@ -640,6 +640,7 @@ def do_astrometry(body: Dict[str, Any]):
 
     request_id = uuid4().hex[:12]
     stage = "validate_request"
+    # Capture raw request context for error logs before validation normalizes it.
     image_url = body.get("image_url")
     return_plot = body.get("return_plot")
     plot_type = body.get("plot_type")
