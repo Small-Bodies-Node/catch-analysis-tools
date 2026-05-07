@@ -1,5 +1,4 @@
 import os
-import glob
 import subprocess
 import argparse
 import numpy as np
@@ -12,6 +11,7 @@ from astropy.wcs import WCS
 from astropy.table import Table
 from astropy.coordinates import SkyCoord
 import calviacat as cvc
+
 
 def run_solve_field(input_fits, output_wcs, pixel_scale, Ra_deg, Dec_deg, scale_units="arcsecperpix"):
     """
@@ -34,9 +34,10 @@ def run_solve_field(input_fits, output_wcs, pixel_scale, Ra_deg, Dec_deg, scale_
         True if the solve-field command succeeded or file already exists.
     """
     if os.path.exists(output_wcs):
-        print(f"Output file '{output_wcs}' already exists. Skipping solve-field execution.")          
+        print(
+            f"Output file '{output_wcs}' already exists. Skipping solve-field execution.")
         return True
-    
+
     config_file = os.environ.get("ASTROMETRY_CONFIG")
     if config_file is None:
         raise RuntimeError(
@@ -103,7 +104,8 @@ def find_sources(image_sub, bkg_err, snr, aperture_radius=7.0):
     )
     source_list['aperture_sum'] = flux
     source_list['aperture_err'] = flux_err
-    source_list = source_list[source_list['aperture_sum'] > 0].reset_index(drop=True)
+    source_list = source_list[source_list['aperture_sum'] > 0].reset_index(
+        drop=True)
     return source_list, image_sub
 
 
@@ -154,11 +156,11 @@ def retrieve_sources(source_list, wcs_solution):
 
 
 def calibrate_photometry(
-    sky_coords,
-    source_list,
-    catalog: str   = 'PanSTARRS1',
-    obs_band: str  = 'obs_band',
-    cal_band: str  = 'g'):
+        sky_coords,
+        source_list,
+        catalog: str = 'PanSTARRS1',
+        obs_band: str = 'obs_band',
+        cal_band: str = 'g'):
     """
     Calibrate instrumental magnitudes against a Pan-STARRS1 catalog.
 
@@ -192,12 +194,12 @@ def calibrate_photometry(
         - distances    : array_like, matching distances
     """
     color_index = f"{obs_band}-{cal_band}"
-    
+
     try:
         CatalogClass = getattr(cvc, catalog)
     except AttributeError:
         raise ValueError(f"Catalog '{catalog}' not found in calviacat")
-    
+
     ref = CatalogClass('cat.db')
     results = ref.search(sky_coords)
     if len(results[0]) < 500:
@@ -205,23 +207,23 @@ def calibrate_photometry(
     objids, distances = ref.xmatch(sky_coords)
     m_inst = -2.5 * np.log10(source_list['aperture_sum'].values)
     zp, C, unc, m_cal, color_mags, _ = ref.cal_color(
-            objids,
-            m_inst,
-            cal_band,
-            color_index,
-        )
+        objids,
+        m_inst,
+        cal_band,
+        color_index,
+    )
     return {
-        'zp'          : zp,
-        'C'           : C,
-        'unc'         : unc,
-        'm'           : m_cal,
-        'm_inst'      : m_inst,
-        'obs_band'    : obs_band,
-        'cal_band'    : cal_band,
-        'color_mags'  : color_mags,
-        'color_index' : color_index,
-        'objids'      : objids,
-        'distances'   : distances,
+        'zp': zp,
+        'C': C,
+        'unc': unc,
+        'm': m_cal,
+        'm_inst': m_inst,
+        'obs_band': obs_band,
+        'cal_band': cal_band,
+        'color_mags': color_mags,
+        'color_index': color_index,
+        'objids': objids,
+        'distances': distances,
     }
 
 
@@ -259,7 +261,8 @@ def plot_color_correction(
     fig, ax = plt.subplots()
     ax.scatter(color_mags, m - m_inst, marker='.')
     x = np.linspace(0, 1.5, 100)
-    ax.plot(x, C * x + zp, color='red', label=f'$m = C\\times({color_index}) + ZP$')
+    ax.plot(x, C * x + zp, color='red',
+            label=f'$m = C\\times({color_index}) + ZP$')
     ax.set_xlabel(f'${color_index}$ (mag)')
     ax.set_ylabel(r'$m - m_{\mathrm{inst}}$ (mag)')
     plt.tight_layout()
@@ -288,12 +291,16 @@ def plot_image(telescope_image_sub, source_list, matched_idx, colored_idx):
     """
     fig, ax = plt.subplots()
     m, s = np.mean(telescope_image_sub), np.std(telescope_image_sub)
-    im = ax.imshow(telescope_image_sub, interpolation='nearest', origin='lower', cmap='gray')
+    im = ax.imshow(telescope_image_sub, interpolation='nearest',
+                   origin='lower', cmap='gray')
     im.set_clim(vmin=m-s, vmax=m+s)
     fig.colorbar(im, ax=ax)
-    ax.plot(source_list['x'], source_list['y'], '+', markersize=5, label='Detected', color='red',)
-    ax.plot(source_list['x'].iloc[matched_idx], source_list['y'].iloc[matched_idx], 'o', markersize=10, color='blue', markerfacecolor='none', label='Matched')
-    ax.plot(source_list['x'].iloc[colored_idx], source_list['y'].iloc[colored_idx], 'o', markersize=15, color='yellow', markerfacecolor='none', label='Selected for Color Corr')
+    ax.plot(source_list['x'], source_list['y'], '+',
+            markersize=5, label='Detected', color='red',)
+    ax.plot(source_list['x'].iloc[matched_idx], source_list['y'].iloc[matched_idx],
+            'o', markersize=10, color='blue', markerfacecolor='none', label='Matched')
+    ax.plot(source_list['x'].iloc[colored_idx], source_list['y'].iloc[colored_idx], 'o',
+            markersize=15, color='yellow', markerfacecolor='none', label='Selected for Color Corr')
     ax.legend()
 
     return fig, ax
@@ -327,18 +334,23 @@ def create_header(image, wcs_solution, zp, unc, source_list, matched_idx, colore
     None
     """
     image_arr = np.asarray(image)
-    primary_hdu = fits.PrimaryHDU(data=image_arr, header=wcs_solution.to_header())
+    primary_hdu = fits.PrimaryHDU(
+        data=image_arr, header=wcs_solution.to_header())
     primary_hdu.header['ZP'] = zp
     primary_hdu.header['ZP_STD'] = unc
-    primary_hdu.header['SUV_FLT']  = cal_band
+    primary_hdu.header['SUV_FLT'] = cal_band
     primary_hdu.header['REF_CATA'] = catalog
-    primary_hdu.header['REF_FLT']  = obj_band
-    primary_hdu.header['CAT_COR']  = f"{cal_band}-{obj_band}"
-    source_list_clean = source_list.map(lambda x: x.filled(np.nan) if hasattr(x, 'filled') else x)
-    detected_hdu = fits.BinTableHDU(Table.from_pandas(source_list_clean), name='DETECTED_SOURCES')
+    primary_hdu.header['REF_FLT'] = obj_band
+    primary_hdu.header['CAT_COR'] = f"{cal_band}-{obj_band}"
+    source_list_clean = source_list.map(
+        lambda x: x.filled(np.nan) if hasattr(x, 'filled') else x)
+    detected_hdu = fits.BinTableHDU(Table.from_pandas(
+        source_list_clean), name='DETECTED_SOURCES')
     if not source_list_clean.empty:
-        matched_hdu = fits.BinTableHDU(Table.from_pandas(source_list_clean.iloc[matched_idx].reset_index(drop=True)), name='SELECTED_STARS')
-        colored_hdu = fits.BinTableHDU(Table.from_pandas(source_list_clean.iloc[colored_idx].reset_index(drop=True)), name='START_COLOR_CORRECTION')
+        matched_hdu = fits.BinTableHDU(Table.from_pandas(
+            source_list_clean.iloc[matched_idx].reset_index(drop=True)), name='SELECTED_STARS')
+        colored_hdu = fits.BinTableHDU(Table.from_pandas(
+            source_list_clean.iloc[colored_idx].reset_index(drop=True)), name='START_COLOR_CORRECTION')
     else:
         matched_hdu = fits.BinTableHDU(name='SELECTED_STARS')
         colored_hdu = fits.BinTableHDU(name='START_COLOR_CORRECTION')
@@ -369,10 +381,14 @@ def cleanup_files(file_base):
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(description="Photometric calibration on a background-subtracted image.")
-    parser.add_argument("input_fits", help="Path to background-subtracted FITS image")
-    parser.add_argument("--Ra", type=float, required=True, help="RA from CATCH")
-    parser.add_argument("--Dec", type=float, required=True, help="DEC from CATCH")
+    parser = argparse.ArgumentParser(
+        description="Photometric calibration on a background-subtracted image.")
+    parser.add_argument(
+        "input_fits", help="Path to background-subtracted FITS image")
+    parser.add_argument("--Ra", type=float, required=True,
+                        help="RA from CATCH")
+    parser.add_argument("--Dec", type=float, required=True,
+                        help="DEC from CATCH")
     parser.add_argument("--bkg_err", type=float, required=True,
                         help="Global background RMS (float, required)")
     parser.add_argument("--pixel_scale", type=float, default=1.86,
@@ -381,23 +397,24 @@ if __name__ == "__main__":
                         help="Detection S/N threshold (default: 7.0)")
     parser.add_argument("--catalog", default="PanSTARRS1",
                         help="Photometric reference catalog (default: PanSTARRS1)")
-    parser.add_argument("--obs_band", default="obs_band", help="Observed image bandpass (used for labeling only; default: 'obs_band')")
-    parser.add_argument("--cal_band", default="r", help="Reference catalog bandpass (default: r)")
+    parser.add_argument("--obs_band", default="obs_band",
+                        help="Observed image bandpass (used for labeling only; default: 'obs_band')")
+    parser.add_argument("--cal_band", default="r",
+                        help="Reference catalog bandpass (default: r)")
     args = parser.parse_args()
 
-    input_fits  = args.input_fits
-    file_base   = os.path.splitext(input_fits)[0]
-    image       = fitsio.read(input_fits).astype(np.float32)
-    Ra          = args.Ra
-    Dec         = args.Dec
-    bkg_err     = args.bkg_err
+    input_fits = args.input_fits
+    file_base = os.path.splitext(input_fits)[0]
+    image = fitsio.read(input_fits).astype(np.float32)
+    Ra = args.Ra
+    Dec = args.Dec
+    bkg_err = args.bkg_err
     pixel_scale = args.pixel_scale
-    snr         = args.snr
-    catalog     = args.catalog
-    obs_band    = args.obs_band
-    cal_band    = args.cal_band
- 
-    
+    snr = args.snr
+    catalog = args.catalog
+    obs_band = args.obs_band
+    cal_band = args.cal_band
+
     output_wcs = f"{file_base}.wcs"
     try:
         if run_solve_field(input_fits, output_wcs, pixel_scale, Ra, Dec):
@@ -416,14 +433,14 @@ if __name__ == "__main__":
         obs_band=obs_band,
         cal_band=cal_band,
     )
-    zp     = calibration["zp"]
-    C      = calibration["C"]
-    unc    = calibration["unc"]
-    m      = calibration["m"]
+    zp = calibration["zp"]
+    C = calibration["C"]
+    unc = calibration["unc"]
+    m = calibration["m"]
     m_inst = calibration["m_inst"]
-    color_mags  = calibration['color_mags']
+    color_mags = calibration['color_mags']
     color_index = calibration['color_index']
-    objids      = calibration['objids']
+    objids = calibration['objids']
 
     if hasattr(objids, "mask"):
         matched_idx = np.where(~objids.mask)[0]
@@ -434,8 +451,10 @@ if __name__ == "__main__":
     else:
         colored_idx = np.arange(len(source_list))
 
-    fig1, ax1 = plot_color_correction(color_mags, m, m_inst, C, zp, color_index)
-    fig2, ax2 = plot_image(telescope_image_sub, source_list, matched_idx, colored_idx)
+    fig1, ax1 = plot_color_correction(
+        color_mags, m, m_inst, C, zp, color_index)
+    fig2, ax2 = plot_image(telescope_image_sub,
+                           source_list, matched_idx, colored_idx)
     plt.show()
 
     create_header(
@@ -446,7 +465,7 @@ if __name__ == "__main__":
         source_list,
         matched_idx,
         colored_idx,
-        input_fits,         
+        input_fits,
         obs_band,
         catalog,
         cal_band,
