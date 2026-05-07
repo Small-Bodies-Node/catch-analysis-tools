@@ -9,4 +9,4 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
-      - "${ASTROMETRY_HOST_DATA_DIR:-${HOME}/.astrometry/data}:/root/.astrometry/data"
+      - "${HOME}/.astrometry/data:/root/.astrometry/data"

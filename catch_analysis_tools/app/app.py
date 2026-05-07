@@ -71,6 +71,8 @@ if __name__ == "__main__":
     # for development
     #logger.info("Running " + ENV.APP_NAME)
     #logger.info(application.url_map)
-    from catch_analysis_tools.app.services.astrometry_data import start_background_check
-    start_background_check()
+    from catch_analysis_tools.app.astrometry_readiness.start_astrometry_background_check import (
+        start_astrometry_background_check,
+    )
+    start_astrometry_background_check()
     app.run(host="0.0.0.0", port=8000)#"catch_analysis_tools.app:app")#, host=ENV.API_HOST, port=ENV.API_PORT)

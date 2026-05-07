@@ -1,36 +1,28 @@
 import numpy as np
-import requests
 import os
 import subprocess
 import pandas as pd
-import json
-import logging
 import sep
 import fitsio
 import matplotlib
 matplotlib.use("Agg")
 import io
 import base64
-from uuid import uuid4
 import matplotlib.pyplot as plt
 from astropy.io import fits
 from astropy.wcs import WCS
 from astropy.table import Table
 from astropy.coordinates import SkyCoord
 from typing import Dict, Any
-from werkzeug.exceptions import BadRequest
-from tempfile import NamedTemporaryFile
-from flask import Response
 from copy import deepcopy
 import calviacat as cvc
 
-from catch_analysis_tools.app.services import astrometry_data
-
-
-logger = logging.getLogger(__name__)
-
 
 class AstrometrySolveError(RuntimeError):
+    pass
+
+
+class AstrometryValidationError(ValueError):
     pass
 
 
@@ -547,12 +539,12 @@ def validate_and_normalize(body: Dict[str, Any]) -> Dict[str, Any]:
         val = body.get(name, default)
         if val is None:
             if required:
-                raise BadRequest(f"{name} is required")
+                raise AstrometryValidationError(f"{name} is required")
             return None
         try:
             return float(val)
         except Exception:
-            raise BadRequest(f"{name} must be a number")
+            raise AstrometryValidationError(f"{name} must be a number")
 
     def get_bool(name, default=False):
         return bool(body.get(name, default))
@@ -560,7 +552,7 @@ def validate_and_normalize(body: Dict[str, Any]) -> Dict[str, Any]:
     # --- Required ---
     image_url = body.get("image_url")
     if not image_url:
-        raise BadRequest("image_url is required")
+        raise AstrometryValidationError("image_url is required")
 
     # --- WCS ---
     use_ra_dec = get_bool("use_ra_dec", False)
@@ -568,7 +560,7 @@ def validate_and_normalize(body: Dict[str, Any]) -> Dict[str, Any]:
     dec = get_float("dec")
 
     if use_ra_dec and (ra is None or dec is None):
-        raise BadRequest("ra/dec required when use_ra_dec=True")
+        raise AstrometryValidationError("ra/dec required when use_ra_dec=True")
 
     pixel_scale = get_float("pixel_scale")
     scale_low = get_float("scale_low")
@@ -576,9 +568,11 @@ def validate_and_normalize(body: Dict[str, Any]) -> Dict[str, Any]:
 
     if pixel_scale is None:
         if scale_low is None or scale_high is None:
-            raise BadRequest("Provide pixel_scale OR (scale_low & scale_high)")
+            raise AstrometryValidationError(
+                "Provide pixel_scale OR (scale_low & scale_high)"
+            )
         if scale_low > scale_high:
-            raise BadRequest("scale_low must be <= scale_high")
+            raise AstrometryValidationError("scale_low must be <= scale_high")
 
     # --- Detection ---
     snr = get_float("snr_threshold", 3.0)
@@ -622,97 +616,6 @@ def validate_and_normalize(body: Dict[str, Any]) -> Dict[str, Any]:
             "plot_type": plot_type,
         }
     }
-
-
-def do_astrometry(body: Dict[str, Any]):
-    if not astrometry_data.is_ready():
-        payload = {
-            "status": "not_ready",
-            "message": "Astrometry index files are not ready yet.",
-            "astrometry_data": astrometry_data.get_status(),
-        }
-        return Response(
-            json.dumps(payload),
-            status=503,
-            mimetype="application/json",
-            headers={"Retry-After": "30"},
-        )
-
-    request_id = uuid4().hex[:12]
-    stage = "validate_request"
-    # Capture raw request context for error logs before validation normalizes it.
-    image_url = body.get("image_url")
-    return_plot = body.get("return_plot")
-    plot_type = body.get("plot_type")
-
-    try:
-        # --- Validate + normalize ---
-        cfg = validate_and_normalize(body)
-
-        image_url = cfg["image_url"]
-        return_plot = cfg["meta"]["return_plot"]
-        plot_type = cfg["meta"]["plot_type"]
-
-        # --- Fetch FITS ---
-        stage = "fetch_fits"
-        try:
-            response = requests.get(image_url, timeout=60)
-            response.raise_for_status()
-        except requests.RequestException:
-            raise BadRequest("Could not retrieve FITS image")
-
-        stage = "write_temp_fits"
-        with NamedTemporaryFile(suffix=".fits", delete=False) as tmp:
-            tmp.write(response.content)
-            tmp_path = tmp.name
-
-        try:
-            # --- Run pipeline ---
-            stage = "run_pipeline"
-            results = run_pipeline(tmp_path, cfg)
-
-            # --- Return plot ---
-            stage = "build_response"
-            if return_plot:
-                if plot_type not in results.get("plots", {}):
-                    raise BadRequest(f"Unknown plot_type: {plot_type}")
-
-                image_bytes = base64.b64decode(results["plots"][plot_type])
-                return Response(image_bytes, mimetype="image/png")
-
-            return results, 200, {"Content-Type": "application/json"}
-
-        finally:
-            os.remove(tmp_path)
-    except BadRequest:
-        raise
-    except AstrometrySolveError as exc:
-        logger.warning(
-            "Astrometry solve did not produce WCS "
-            "[request_id=%s stage=%s image_url=%r return_plot=%r plot_type=%r]",
-            request_id,
-            stage,
-            image_url,
-            return_plot,
-            plot_type,
-        )
-        payload = {
-            "status": "solve_failed",
-            "message": str(exc),
-            "request_id": request_id,
-        }
-        return Response(json.dumps(payload), status=422, mimetype="application/json")
-    except Exception:
-        logger.exception(
-            "Astrometry request failed "
-            "[request_id=%s stage=%s image_url=%r return_plot=%r plot_type=%r]",
-            request_id,
-            stage,
-            image_url,
-            return_plot,
-            plot_type,
-        )
-        raise
 
 
 # ## when testing the code locally

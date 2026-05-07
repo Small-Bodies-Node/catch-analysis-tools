@@ -13,7 +13,7 @@ print_help() {
 Usage: ./_ping_astrometry [--local]
 
 Options:
-  --local     Ping http://localhost:8000 instead of the deployed service.
+  --local     Ping http://127.0.0.1:8000 instead of the deployed service.
   -h, --help  Show this help.
 EOF
 }
@@ -66,6 +66,8 @@ fi
 
 endpoint="${service_base_url%/}/astrometry"
 echo "Pinging: ${endpoint}"
+
+# /wcs POST
 
 payload='{
     "image_url": "https://uxzqjwo0ye.execute-api.us-west-1.amazonaws.com/api/images/urn:nasa:pds:gbo.ast.loneos.survey:data_augmented:060104_1a_099_fits?ra=51.11064&dec=17.38378&size=12.60arcmin&format=fits",

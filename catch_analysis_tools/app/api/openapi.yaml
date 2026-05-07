@@ -10,7 +10,7 @@ info:
 paths:
   /hello:
     get:
-      operationId: catch_analysis_tools.app.services.health.hello
+      operationId: catch_analysis_tools.app.handlers.hello.hello
       summary: Basic service liveness endpoint.
       responses:
         "200":
@@ -25,7 +25,7 @@ paths:
                   docker_image_tag=2026-02-11-001
   /health:
     get:
-      operationId: catch_analysis_tools.app.services.astrometry_data.health
+      operationId: catch_analysis_tools.app.handlers.health.health
       summary: Service health and astrometry data readiness.
       responses:
         "200":
@@ -36,7 +36,7 @@ paths:
                 type: object
   /reset:
     post:
-      operationId: catch_analysis_tools.app.services.astrometry_data.reset
+      operationId: catch_analysis_tools.app.handlers.reset.reset
       summary: Force an astrometry data readiness recheck.
       responses:
         "202":
@@ -50,7 +50,7 @@ paths:
       tags:
         - Astrometry
       summary: Perform astrometry and optionally return a plot image.
-      operationId: catch_analysis_tools.app.services.astrometry.do_astrometry
+      operationId: catch_analysis_tools.app.handlers.astrometry.do_astrometry
 
       requestBody:
         required: true

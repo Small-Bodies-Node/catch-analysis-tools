@@ -13,7 +13,7 @@ print_help() {
 Usage: ./_ping_health [--local]
 
 Options:
-  --local     Ping http://localhost:8000 instead of the deployed service.
+  --local     Ping http://127.0.0.1:8000 instead of the deployed service.
   -h, --help  Show this help.
 EOF
 }
