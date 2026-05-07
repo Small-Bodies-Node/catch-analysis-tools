@@ -53,7 +53,7 @@ Running locally will install the currently checked out version of the CAT.
 ### DWD's changes:
 
 - Added terraform configuration. For now, we are depending on my local machine for state-files.
-- Moved docker stuff to just two files in the root dir: Dockerfile and docker-compose.yml. We'll worry about different deployments later
+- Moved docker stuff to just two files in the root dir: Dockerfile and docker-compose.yml. We'll worry about different deployments later.
 - To run the app locally, use `docker-compose up`
 - To deploy to AWS:
   - Don't do this for now -- rely on DWD to do it -- this is just FYI
@@ -63,9 +63,10 @@ Running locally will install the currently checked out version of the CAT.
   - Update tf state with `./_tf apply`
 - I also made some changes adding a /hello route, and wiring up the flask code to get it to work
 - Added a simple script to ping the endpoint created by tf, `./_ping_endpoint`
+- To make sure that the /astrometry endpoint does not run before the Astrometry.net index files are downloaded, I added a bunch of logic in `catch_analysis_tools/app/astrometry_readiness`. See README therein for details. It also involves a new route `/health` that lets you know if the files are downloaded.
 
 
-## Astrometry Configuration 
+## Astrometry Configuration
 
 The astrometric calibration pipeline depends on **astrometry.net** index files and a corresponding configuration file. These are required for WCS solving.
 
