@@ -1,3 +1,7 @@
+# dwd-dev stuff
+AGENTS.md
+.devcontainer
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -167,6 +171,7 @@ cython_debug/
 *.tfstate.backup
 .terraform.lock.hcl
 *.tfvars
+terraform.tfstate.*
 
 
 # IDE files

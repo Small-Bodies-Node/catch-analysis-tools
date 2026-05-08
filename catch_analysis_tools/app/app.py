@@ -18,14 +18,14 @@ from starlette.middleware.cors import CORSMiddleware
 #logger: logging.Logger = get_logger()
 app = connexion.FlaskApp(__name__, specification_dir="api/")
 
-#app.add_middleware(
-#    CORSMiddleware,
-#    position=MiddlewarePosition.BEFORE_EXCEPTION,
-#    allow_origins=["*"],
-#    allow_credentials=True,
-#    allow_methods=["*"],
-#    allow_headers=["*"],
-#)
+app.add_middleware(
+    CORSMiddleware,
+    position=MiddlewarePosition.BEFORE_EXCEPTION,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 
@@ -71,4 +71,8 @@ if __name__ == "__main__":
     # for development
     #logger.info("Running " + ENV.APP_NAME)
     #logger.info(application.url_map)
+    from catch_analysis_tools.app.astrometry_readiness.start_astrometry_background_check import (
+        start_astrometry_background_check,
+    )
+    start_astrometry_background_check()
     app.run(host="0.0.0.0", port=8000)#"catch_analysis_tools.app:app")#, host=ENV.API_HOST, port=ENV.API_PORT)

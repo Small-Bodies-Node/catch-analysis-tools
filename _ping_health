@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+#
+# Resolve service URL from OpenTofu outputs and ping /health.
+# Use --local to ping the locally running docker-compose app.
+
+set -euo pipefail
+IFS=$'\n\t'
+
+local_mode=false
+
+print_help() {
+  cat <<'EOF'
+Usage: ./_ping_health [--local]
+
+Options:
+  --local     Ping http://127.0.0.1:8000 instead of the deployed service.
+  -h, --help  Show this help.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --local)
+      local_mode=true
+      shift
+      ;;
+    -h|--help)
+      print_help
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      print_help >&2
+      exit 1
+      ;;
+  esac
+done
+
+if ! command -v curl >/dev/null 2>&1; then
+  echo "curl command not found. Install curl and try again." >&2
+  exit 1
+fi
+
+if [[ "${local_mode}" == true ]]; then
+  service_base_url="${LOCAL_SERVICE_BASE_URL:-http://127.0.0.1:8000}"
+else
+  if [[ ! -f ".env" ]]; then
+    echo "Missing .env file. Copy .env-template and configure required values." >&2
+    exit 1
+  fi
+
+  if ! command -v tofu >/dev/null 2>&1; then
+    echo "OpenTofu (tofu) is not installed or not in PATH." >&2
+    exit 1
+  fi
+
+  # shellcheck disable=SC1091
+  source .env
+
+  service_base_url="$(tofu output -raw service_base_url)"
+  if [[ -z "${service_base_url}" ]]; then
+    echo "Failed to resolve service_base_url from tofu output." >&2
+    exit 1
+  fi
+fi
+
+endpoint="${service_base_url%/}/health"
+echo "Pinging: ${endpoint}"
+
+printf 'Executing:\n'
+printf 'curl -i %q\n' "${endpoint}"
+
+curl -i "${endpoint}"

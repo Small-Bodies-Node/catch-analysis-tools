@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+#
+# Resolve service URL from OpenTofu outputs and test POST /astrometry.
+# Use --local to ping the locally running docker-compose app.
+
+set -euo pipefail
+IFS=$'\n\t'
+
+local_mode=false
+
+print_help() {
+  cat <<'EOF'
+Usage: ./_ping_astrometry [--local]
+
+Options:
+  --local     Ping http://127.0.0.1:8000 instead of the deployed service.
+  -h, --help  Show this help.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --local)
+      local_mode=true
+      shift
+      ;;
+    -h|--help)
+      print_help
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      print_help >&2
+      exit 1
+      ;;
+  esac
+done
+
+if ! command -v curl >/dev/null 2>&1; then
+  echo "curl command not found. Install curl and try again." >&2
+  exit 1
+fi
+
+if [[ "${local_mode}" == true ]]; then
+  service_base_url="${LOCAL_SERVICE_BASE_URL:-http://127.0.0.1:8000}"
+else
+  if [[ ! -f ".env" ]]; then
+    echo "Missing .env file. Copy .env-template and configure required values." >&2
+    exit 1
+  fi
+
+  if ! command -v tofu >/dev/null 2>&1; then
+    echo "OpenTofu (tofu) is not installed or not in PATH." >&2
+    exit 1
+  fi
+
+  # shellcheck disable=SC1091
+  source .env
+
+  service_base_url="$(tofu output -raw service_base_url)"
+  if [[ -z "${service_base_url}" ]]; then
+    echo "Failed to resolve service_base_url from tofu output." >&2
+    exit 1
+  fi
+fi
+
+endpoint="${service_base_url%/}/astrometry"
+echo "Pinging: ${endpoint}"
+
+# /wcs POST
+
+payload='{
+    "image_url": "https://uxzqjwo0ye.execute-api.us-west-1.amazonaws.com/api/images/urn:nasa:pds:gbo.ast.loneos.survey:data_augmented:060104_1a_099_fits?ra=51.11064&dec=17.38378&size=12.60arcmin&format=fits",
+    "ra": 51.11064,
+    "dec": 17.38378,
+    "use_ra_dec": true,
+    "pixel_scale": 2.5,
+    "snr_threshold": 3.0,
+    "aperture_radius": 7.0,
+    "catalog": "PanSTARRS1",
+    "obs_band": "g",
+    "cal_band": "r",
+    "return_plot": false
+  }'
+
+printf 'Executing:\n'
+printf 'curl -i -X POST %q -H %q --max-time 900 --data %q\n' \
+  "${endpoint}" \
+  "Content-Type: application/json" \
+  "${payload}"
+
+curl -i -X POST "${endpoint}" \
+  -H "Content-Type: application/json" \
+  --max-time 900 \
+  --data "${payload}"

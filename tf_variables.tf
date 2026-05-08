@@ -79,10 +79,28 @@ variable "ECS_DESIRED_COUNT" {
   default     = 1
 }
 
+variable "ECS_HEALTHCHECK_GRACE_PERIOD_SECONDS" {
+  description = "Grace period to allow initial container startup tasks such as data downloads before ALB health checks count against the service"
+  type        = number
+  default     = 1800
+}
+
 variable "ECS_LOGS_RETENTION_DAYS" {
   description = "CloudWatch Logs retention in days for ECS container logs"
   type        = number
   default     = 14
+}
+
+variable "EFS_PERFORMANCE_MODE" {
+  description = "Performance mode for the astrometry EFS file system"
+  type        = string
+  default     = "generalPurpose"
+}
+
+variable "EFS_THROUGHPUT_MODE" {
+  description = "Throughput mode for the astrometry EFS file system"
+  type        = string
+  default     = "bursting"
 }
 
 variable "CAT_ARCHITECTURE" {

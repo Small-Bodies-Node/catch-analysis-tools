@@ -10,7 +10,7 @@ info:
 paths:
   /hello:
     get:
-      operationId: catch_analysis_tools.app.services.health.hello
+      operationId: catch_analysis_tools.app.handlers.hello.hello
       summary: Basic service liveness endpoint.
       responses:
         "200":
@@ -19,13 +19,38 @@ paths:
             text/plain:
               schema:
                 type: string
-                example: Hello, World!
+                example: |
+                  Catch Analysis Tools is running.
+                  package_version=1.0.0
+                  docker_image_tag=2026-02-11-001
+  /health:
+    get:
+      operationId: catch_analysis_tools.app.handlers.health.health
+      summary: Service health and astrometry data readiness.
+      responses:
+        "200":
+          description: Service is running.
+          content:
+            application/json:
+              schema:
+                type: object
+  /reset:
+    post:
+      operationId: catch_analysis_tools.app.handlers.reset.reset
+      summary: Force an astrometry data readiness recheck.
+      responses:
+        "202":
+          description: Recheck started.
+          content:
+            application/json:
+              schema:
+                type: object
   /astrometry:
     post:
       tags:
         - Astrometry
       summary: Perform astrometry and optionally return a plot image.
-      operationId: catch_analysis_tools.app.services.astrometry.do_astrometry
+      operationId: catch_analysis_tools.app.handlers.astrometry.do_astrometry
 
       requestBody:
         required: true
@@ -197,6 +222,20 @@ paths:
 
         "400":
           description: Bad request (invalid input or FITS error)
+
+        "422":
+          description: Astrometry could not solve the submitted image.
+          content:
+            application/json:
+              schema:
+                type: object
+
+        "503":
+          description: Astrometry index files are not ready yet.
+          content:
+            application/json:
+              schema:
+                type: object
 
         "500":
           description: Internal server error

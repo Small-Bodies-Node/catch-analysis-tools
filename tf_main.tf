@@ -30,6 +30,7 @@ locals {
   log_group_name         = "/aws/ecs/${local.name_prefix}app"
   alb_name               = trimsuffix(substr("${local.normalized_name_prefix}alb", 0, 32), "-")
   target_group_name      = trimsuffix(substr("${local.normalized_name_prefix}tg", 0, 32), "-")
+  efs_name               = trimsuffix(substr("${local.normalized_name_prefix}efs", 0, 32), "-")
   execution_role_name    = substr("${local.name_prefix}ecs-task-execution-role", 0, 64)
 }
 
@@ -139,9 +140,49 @@ resource "aws_security_group" "ecs_tasks" {
   }
 }
 
+resource "aws_security_group" "efs" {
+  name        = "${local.name_prefix}efs-sg"
+  description = "Allow NFS traffic from ECS tasks"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description     = "NFS from ECS tasks"
+    from_port       = 2049
+    to_port         = 2049
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ecs_tasks.id]
+  }
+
+  egress {
+    description = "Allow all outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
 resource "aws_cloudwatch_log_group" "ecs" {
   name              = local.log_group_name
   retention_in_days = var.ECS_LOGS_RETENTION_DAYS
+}
+
+resource "aws_efs_file_system" "astrometry_data" {
+  creation_token   = "${local.name_prefix}astrometry-data"
+  performance_mode = var.EFS_PERFORMANCE_MODE
+  throughput_mode  = var.EFS_THROUGHPUT_MODE
+  encrypted        = true
+
+  tags = {
+    Name = local.efs_name
+  }
+}
+
+resource "aws_efs_mount_target" "astrometry_data" {
+  count           = length(aws_subnet.public)
+  file_system_id  = aws_efs_file_system.astrometry_data.id
+  subnet_id       = aws_subnet.public[count.index].id
+  security_groups = [aws_security_group.efs.id]
 }
 
 resource "aws_iam_role" "ecs_task_execution" {
@@ -183,11 +224,37 @@ resource "aws_ecs_task_definition" "app" {
     operating_system_family = "LINUX"
   }
 
+  volume {
+    name = "astrometry-data"
+
+    efs_volume_configuration {
+      file_system_id     = aws_efs_file_system.astrometry_data.id
+      transit_encryption = "ENABLED"
+    }
+  }
+
   container_definitions = jsonencode([
     {
       name      = local.container_name
       image     = "${aws_ecr_repository.app.repository_url}:${var.DOCKER_IMAGE_TAG}"
       essential = true
+      environment = [
+        {
+          name  = "ASTROMETRY_INDEX_DIR"
+          value = "/root/.astrometry/data"
+        },
+        {
+          name  = "DOCKER_IMAGE_TAG"
+          value = var.DOCKER_IMAGE_TAG
+        }
+      ]
+      mountPoints = [
+        {
+          sourceVolume  = "astrometry-data"
+          containerPath = "/root/.astrometry/data"
+          readOnly      = false
+        }
+      ]
       portMappings = [
         {
           containerPort = var.CONTAINER_PORT
@@ -206,7 +273,10 @@ resource "aws_ecs_task_definition" "app" {
     }
   ])
 
-  depends_on = [aws_iam_role_policy_attachment.ecs_task_execution_default]
+  depends_on = [
+    aws_iam_role_policy_attachment.ecs_task_execution_default,
+    aws_efs_mount_target.astrometry_data,
+  ]
 }
 
 resource "aws_lb" "main" {
@@ -249,6 +319,8 @@ resource "aws_ecs_service" "app" {
   task_definition = aws_ecs_task_definition.app.arn
   desired_count   = var.ECS_DESIRED_COUNT
   launch_type     = "FARGATE"
+  platform_version = "1.4.0"
+  health_check_grace_period_seconds = var.ECS_HEALTHCHECK_GRACE_PERIOD_SECONDS
 
   network_configuration {
     subnets          = aws_subnet.public[*].id

@@ -1,10 +1,12 @@
 FROM python:3.12-slim
 
-# Set working directory
 WORKDIR /app
 
-### Install system dependencies
-RUN apt-get update && apt-get install -y \
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  astrometry.net \
+  source-extractor \
   netcat-openbsd \
   git \
   wget \
@@ -13,33 +15,27 @@ RUN apt-get update && apt-get install -y \
   libbz2-dev \
   && rm -rf /var/lib/apt/lists/*
 
-RUN pip install -U pip setuptools wheel "connexion[flask,swagger-ui,uvicorn]"
+RUN --mount=type=cache,target=/root/.cache/pip \
+  pip install -U pip setuptools wheel
 
-COPY . /app
-RUN pip install /app
-COPY requirements.local.txt .
-RUN pip install -r requirements.local.txt
+COPY requirements.local.txt /app/
 
+RUN --mount=type=cache,target=/root/.cache/pip \
+  pip install -r requirements.local.txt
 
-# Checkout code
-# RUN --mount=type=bind,source=./,target=/app/src/
-# COPY \
-#   requirements.local.txt \
-#   setup.py \
-#   pyproject.toml \
-#   .
-# COPY catch_analysis_tools /app/catch_analysis_tools
+COPY pyproject.toml setup.py MANIFEST.in README.md /app/
+COPY catch_analysis_tools /app/catch_analysis_tools
+COPY scripts /app/scripts
+COPY docker /app/docker
 
-# # ARG CAT_DEPLOYMENT
-# # RUN if [ "$CAT_DEPLOYMENT" = "prod" ]; then \
-# #   git clone git+https://github.com
-# #   pip install -r src/requirements.prod.txt; \
-# # else \
-# # fi
+ARG PACKAGE_VERSION=0.0.0
+ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_CATCH_ANALYSIS_TOOLS=${PACKAGE_VERSION}
 
-# # Install dependencies
-# #RUN pip install -r requirements.local.txt;
+RUN --mount=type=cache,target=/root/.cache/pip \
+  pip install --no-deps /app
+
+RUN chmod +x /app/docker/entrypoint.sh
 
 EXPOSE 8000
 
-CMD ["python3", "-m", "catch_analysis_tools.app.app"]
+ENTRYPOINT ["/app/docker/entrypoint.sh"]
