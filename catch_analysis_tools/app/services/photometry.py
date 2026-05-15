@@ -1,350 +1,199 @@
-import numpy as np
-from matplotlib import pyplot as plt
-from astropy.io import fits
-from photutils.segmentation import detect_sources, detect_threshold, make_2dgaussian_kernel, SourceFinder, SourceCatalog, make_2dgaussian_kernel
-from astropy.stats import sigma_clipped_stats, SigmaClip
-from photutils.background import SExtractorBackground as SourceExtractorBackground
-from photutils.background import Background2D, MedianBackground
-from photutils.utils import circular_footprint
-from astropy.convolution import convolve
-from astropy.coordinates import SkyCoord, ICRS
+import os
+from catch_analysis_tools.photometry import get_image,subpixel_centroid,create_user_aperture,define_aperture,do_aperture_photometry,source_instr_mag,calibrated_mag
+from catch_analysis_tools.background import calc_bkg
 from astropy.wcs import WCS
-from photutils.aperture import aperture_photometry, CircularAnnulus, CircularAperture
-from photutils.centroids import centroid_quadratic, centroid_sources, centroid_com, centroid_2dg
+import matplotlib
+matplotlib.use('Agg') 
+from matplotlib import pyplot as plt
+from astropy.visualization import ZScaleInterval
+from astropy.visualization.mpl_normalize import ImageNormalize
+import numpy as np
 from astropy import units as u
+from astropy.coordinates import SkyCoord, ICRS
+from astropy.io import fits
+from catch_analysis_tools.background import global_subtraction
 
-# here are functions for grabbing the data, doing background subtractions and manipulating source extractions
-def get_image(url):
-    """Access a cutout via a call to a CATCH URL
-
-
-    Parameters
-    ----------
-    url : string
-        CATCH-generated URL from a query.
-
-   
-
-    Returns
-    -------
-    data : array_like
-        This is a 2D array containing the image data returned by the CATCH query
-    header : 
-        FITS header class, from astropy.io.fits.Header 
-
-
+def get_world_coordinates(WCS_file,x,y):
     """
-
-    fits_hdu = fits.open(url)
-    data = fits_hdu[0].data
-    header = fits_hdu[0].header
-    return data, header
-    
-def id_good_sources(data,bkg):
-
-    """Uses a segmentation image to identify reliable sources in NON-BACKGROUND-SUBTRACTED image that can be snapped to.
-
-       Coincidentally, computes baseline photometry that could be used as a quality comparison user results,
-       though this flux isn't always a good comparison as it often underestimates the source size
-
-
-    Parameters
-    ----------
-    data : array_like
-        2D image array to be background subtracted
-
-    bkg :
-        background object returned from get_background() or global_subtraction()
-
-    Returns
-    -------
-    cat :
-        Astropy Table class, from SourceCatalog output giving source locations, fluxes
-    
-
-
-    """    
-
-    source_threshold = bkg.background_median + 1.5 * bkg.background_rms
-
-
-    kernel = make_2dgaussian_kernel(3.0, size=5)  # FWHM = 3.0
-    convolved_data = convolve(data, kernel)
-    finder = SourceFinder(npixels=5, progress_bar=False)
-    segment_map = finder(convolved_data, source_threshold)
-    
-    
-    vmax = np.percentile(np.ndarray.flatten(data),99)
-    vmin = np.percentile(np.ndarray.flatten(data),1)
-    
-    # make a plot to show the background subtracted frame and the resulting segment map
-    #fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12.5))
-    #ax1.imshow(data, origin='lower', cmap='Greys_r', vmin=vmin,vmax=vmax)
-    #ax1.set_title('Original Data')
-
-    #ax2.imshow(segment_map, origin='lower', cmap=segment_map.cmap,
-    #       interpolation='nearest')
-    #ax2.set_title('Segmentation Image')
-
-    
-    cat = SourceCatalog(data, segment_map, convolved_data=convolved_data)
-    
-    return cat
-    
-def create_user_aperture(position,size):
-    """Simple placeholder function for making user-selected circular apertures
-
-
-    Parameters
-    ----------
-    Position : array_like
-        [x,y] location of aperture center
-
-    Size : Int
-        Radius of aperture, given in pixels
-
-    Returns
-    -------
-    aperture : 
-        Photutils circular aperture object with the specified size, location parameters
-    
-
-
-    """    
-    
-    aperture = CircularAperture(position, r=size)
-    return aperture
-
-def subpixel_centroid(user_point,data,radius):
-
-    """Takes in a user defined point and returns the location of the brightest pixel within radius pixels
-
-
-    Parameters
-    ----------
-    user_point : array_like
-        [x,y] location of desired point, to be snapped from
-
-    data : array_like
-           image to be searched for sources to be snapped to
-
-    radius : Int
-             number of pixels within which objects can be snapped to from user_point
-
-    Returns
-    -------
-    target_position: array_like
-                     [x,y] location of the source that is closest to user_point found in data
-    
-
-    """        
-
-    footprint = circular_footprint(radius)
-    x, y = centroid_sources(data, user_point[0], user_point[1], footprint=footprint,
-                            centroid_func=centroid_2dg)
-    
-    target_position = np.array([x[0],y[0]])
-    return target_position
-        
-def do_aperture_photometry(data,source_aperture,bkg_median, bkg_var, bkg_aperture):
-    """ Takes in an image, a source aperture, and outputs from the calc_annulus_bkg function
-     
-        Returns the source flux (background subtracted, per-pixel background median) and the
-        uncertainty as defined at the quoted link
-    
-        method='center' means pixels are either in or out, no interpolation to a perfect circle
-        (in other words, areas will be in whole pixels)
-
-    Parameters
-    ----------
-    data : array_like
-           image data to be used for photometry
-
-    source_aperture : 
-             Photutils aperture object containing desired source
-
-    bkg_median : float
-                 median value of pixel background, 
-    
-    bkg_var : float
-              variance of pixel background, ideally from output of calc_annulus_background
-
-    bkg_aperture : 
-                   Photutils aperture object containing background, ideally as annulus_aperture output from calc_annulus_background
-
-
-    Returns
-    -------
-    source_sum : float
-                 background subtracted flux of the targeted source
-    
-    source_err : float
-                 error on source flux
-
+    Accepts an astropy-readable WCS object (a .wcs or fits file ) and outputs the world coordinates of an (x,y) pixel point in decimal degrees.
     """
-
-    aperture_mask = source_aperture.to_mask(method='center')
-    aperture_data = aperture_mask.multiply(data)
-    aperture_sum = np.nansum(aperture_data)
-    
-    background = bkg_median * source_aperture.area
-    source_sum = aperture_sum-background
-
-    
-    # Using uncertainty as derived by https://wise2.ipac.caltech.edu/staff/fmasci/ApPhotUncert.pdf
-    # Setting the gain g=1, N_i = 1. Assumes data has already been converted to e-
-    ### TODO: FIND THE GAINS FOR EACH SURVEY
-    term1 = source_sum
-    term2 = (source_aperture.area + (np.pi/2) * (np.square(source_aperture.area)/bkg_aperture.area) )*bkg_var
-    source_err = np.sqrt(term1 + term2)
-    
-    return source_sum, source_err
-
-def load_thumbnail(url):
-    """Access a cutout via a call to a CATCH URL, returning WCSobject
-
-
-    Parameters
-    ----------
-    url : string
-        CATCH-generated URL from a query.
-
-   
-
-    Returns
-    -------
-    data : array_like
-        This is a 2D array containing the image data returned by the CATCH query
-
-    header : 
-             FITS header class, from astropy.io.fits.Header 
-
-    img_WCS:
-             Astropy WCS object
-
-    """
-    fits_hdu = fits.open(url)
-    data = fits_hdu[0].data
-    header = fits_hdu[0].header
-    img_WCS = WCS(header)
-    return data, header, img_WCS
-
-def get_pixel_WCS(img_WCS,pixel):
-    """Retrieve WCS location of a pixel given its (x,y) position
-
-    Parameters
-    ----------
-    
-    img_WCS: 
-             Astropy WCS object
-
-    pixel: array_like
-           [x,y] pixel location to get WCS location of
-
-
-    Returns
-    -------
-    loc: 
-         Astropy SkyCoord location of desired pixel
-    """
-    
-    loc = img_WCS.pixel_to_world(pixel[0],pixel[1])
-    return loc
-
-def get_WCS_pixel(img_WCS,ra_dec):
-    """Retrieve pixel location at a given (RA, Dec) sky coordinate position
-
-    Parameters
-    ----------
-    
-    img_WCS: 
-             Astropy WCS object
-
-    ra_dec: array_like
-           [Right Ascension, Declination] location to retrieve pixel location of
-
-    Returns
-    -------
-
-    loc: array_like
-         Pixel location of specified (RA, Dec)
-    """
-
-    sky_loc = SkyCoord(ICRS(ra=ra_dec[0]*u.deg, dec=ra_dec[1]*u.deg))
-    loc = img_WCS.world_to_pixel(sky_loc)
-    return loc
-    
-def source_instr_mag(ap_flux,ap_fluxerr,exposure_time):
-
-    """ Quick function to return instrumental magnitudes from a source flux
-        Does not force magnitude uncertainties to be symmetric
-        
-        To be used by calibrated_mag() function
-
-
-    Parameters
-    ----------
-    
-    ap_flux: float
-             Flux (in counts) of source
-
-    ap_fluxerr: float
-                Flux error (in counts)
-
-    exposure_time: float
-                   integration time of the frame (s)
-
-    Returns
-    -------
-
-    instr_mag_array: array_like
-                     array containing source instrumental magnitude and uncertainties,
-                     as [Magnitude, Upper Magnitude Uncertainty, Lower Magnitude Uncertainty]
-    """
-
-    instr_mag = -2.5*np.log10(ap_flux/exposure_time)
-    instr_mag_hi = -2.5*np.log10((ap_flux-ap_fluxerr)/exposure_time)
-    instr_mag_lo = -2.5*np.log10((ap_flux+ap_fluxerr)/exposure_time)
-    
-    instr_mag_hi_uncert = instr_mag_hi - instr_mag
-    instr_mag_lo_uncert = instr_mag_lo - instr_mag
-    
-    inst_mag_array = {
-        "instr_mag": float(instr_mag),
-        "instr_mag_hi_uncert": float(instr_mag_hi_uncert),
-        "instr_mag_lo_uncert": float(instr_mag_lo_uncert)
+    #WCS_file = body['WCS_file']
+    #x = body['x']
+    #y = body['y']
+    world_coords = WCS(fits.open(WCS_file)[0].header)
+    loc = world_coords.pixel_to_world(x,y)
+    print(loc)
+    transform_results = {
+        "x":x,
+        "y":y,
+        "ra":loc.ra.deg,
+        "dec":loc.dec.deg
     }
-    return inst_mag_array
+    return transform_results
 
-def calibrated_mag(instr_mag_array,zero_point,zero_point_uncert):
-    """ Takes in the array from source_instr_mag, converts to derived magnitude,
-        propagating uncertainties from both
+def get_pixel_coordinates(WCS_file,ra,dec):
+    """
+    Accepts an astropy-readable WCS object (a .wcs or fits file) and outputs the (x,y) pixel coordinates of an (ra,dec) point in decimal degrees.
+    """
+    #WCS_file = body['WCS_file']
+    #ra = body['ra']
+    #dec = body['dec']
+    world_coords = WCS(fits.open(WCS_file)[0].header)
+    sky_loc = SkyCoord(ICRS(ra=ra*u.deg, dec=dec*u.deg))
+    loc = world_coords.world_to_pixel(sky_loc)
+    x = loc[0].item()
+    y = loc[1].item()
 
+    transform_results = {
+        "x":x,
+        "y":y,
+        "ra":ra,
+        "dec":dec
+    }
+    return transform_results  
+
+def centroid(file,target_x,target_y,search_radius):
+    """
+    Searches for source nearby to expected ephemeris location in image, assumes that astrometry solution has been rerun and that both the cutout .fits file and the redone .wcs file exist. 
+    
     
     Parameters
     ----------
-    instr_mag_array: array_like
-                     From source_instr_mag() output: array containing source instrumental magnitude and uncertainties,
-                     as [Magnitude, Upper Magnitude Uncertainty, Lower Magnitude Uncertainty]
+    file : string
+        Base filename (without .fits or .wcs extension) taken from CATCH-generated query URL.
 
-    zero_point: float
-                zero point magnitude of image (ideally taken from metadata in header given by astrometry solution)
+    target_x : float
+        Target x pixel location, to be used as initial guess for the object.
 
-    zero_point_uncert: float
-                       zero point uncertainty (mags) of image (ideally taken from metadata in header given by astrometry solution)
-    
+    target_y : float
+        Target y pixel ephemeris location, to be used as initial guess for the object.
+
+    search_radius : float
+        Radius in pixels of search area (centered on (x,y) ) for centroiding
+
+
     Returns
     -------
-
-    calib_mag_array: array_like
-                     array containing source CALIBRATED magnitude and uncertainties,
-                     as [Magnitude, Upper Magnitude Uncertainty, Lower Magnitude Uncertainty]
+    search_results :
+        array_like
+                    
+                    
+    figname: 
+        string
+                    Output plot showing the default aperture + annulus extraction onto the cutout image.
     """
 
-    calib_mag = zero_point+instr_mag_array[0]
-    calib_mag_hi = np.sqrt(np.square(zero_point_uncert) + np.square(instr_mag_array[1]))
-    calib_mag_lo = np.sqrt(np.square(zero_point_uncert) + np.square(instr_mag_array[2]))
     
-    calib_mag_array = np.array([calib_mag,calib_mag_hi,calib_mag_lo])
-    return calib_mag_array    
+    #tmp_wcs = WCS(file+'.wcs')
+    img, header = get_image(file)
+
+    #target_pix = get_WCS_pixel(tmp_wcs,target_ra,target_dec)
+    #target_x = target_pix[0].item()
+    #target_y = target_pix[1].item()
+
+    cent_pix = subpixel_centroid([target_x,target_y],img,search_radius)
+    #cent_loc = get_pixel_WCS(tmp_wcs,cent_pix[0],cent_pix[1])
+    
+    search_results = {
+        "init_guess_x":target_x,
+        "init_guess_y":target_y,
+        "search_radius":search_radius,
+        "cent_x":cent_pix[0],
+        "cent_y":cent_pix[1],
+    }
+    print(search_results)
+    interval = ZScaleInterval()
+    norm = ImageNormalize(img, interval=ZScaleInterval())
+
+            
+    plt.figure(figsize=(8,8))
+    plt.imshow(img,norm=norm,cmap='gray_r')
+    plt.scatter(img.shape[0]/2,img.shape[1]/2,s=100,marker='x',label='Image Center')
+    plt.scatter(target_x,target_y,s=100,marker='+',label='Initial Guess')
+    plt.scatter(cent_pix[0],cent_pix[1],s=50,marker='.',c='yellow',label='Centroid Location')
+    plt.xlim(target_x-20,target_x+20)
+    plt.ylim(target_y-20,target_y+20)
+    plt.legend()
+
+        
+
+    file_base = os.path.splitext(file)[0]
+    figname = 'centroid.png'
+    plt.savefig(figname)
+    plt.close()
+    centroid_results = {
+        "search_results": search_results,
+        "centroid_figure": figname
+    }
+
+    return centroid_results
+
+#todo: create function that takes target location, background location and outputs aperture objects
+# this function can be fed the outputs of centroid_location
+
+def target_extraction(body):
+    """
+    Searches for source nearby to expected ephemeris location in image, assumes that astrometry solution has been rerun and that both the cutout .fits file and the redone .wcs file exist. 
+    
+    
+    Parameters
+    ----------
+    body : dict
+        Request body containing file, target_aperture_params, and background_aperture_params.
+    """
+    file = body['file']
+    target_aperture_params = body['target_aperture_params']
+    background_aperture_params = body['background_aperture_params']
+
+
+    #tmp_wcs = WCS(filebase+'.wcs')
+    img, header = get_image(file)
+
+
+    data_sub, twoD_bkg = global_subtraction(img)
+    file_base = os.path.splitext(file)[0]
+    #targ_loc = get_WCS_pixel(tmp_wcs,target_ra,target_dec)
+
+    #centroid_results = centroid_location(filebase,target_x,target_y,search_radius)
+    #targ_cent = np.array([centroid_results["search_results"]["cent_x"],centroid_results["search_results"]["cent_y"]])
+
+    target_aperture = define_aperture(target_aperture_params)
+    background_aperture = define_aperture(background_aperture_params)
+
+    interval = ZScaleInterval()
+    norm = ImageNormalize(data_sub, interval=ZScaleInterval())
+
+    bkg, bkg_var = calc_bkg(data_sub,background_aperture,'median',None)
+            
+    target_flux, target_fluxerr = do_aperture_photometry(img,target_aperture,background_aperture)
+    #instr_mag = source_instr_mag(aperture_flux,aperture_fluxerr,1)
+    #cal_mag = calibrated_mag(instr_mag,header['zp'],header['zp_std']) # temporarily using the original Atlas header values
+
+    #cal_mag_array = calibrated_mag(instr_mag,header['magzpt'],header['zprms'])
+    
+    # could put code to filter out frames where targ_loc and targ_cent vary by more than a couple pixels here
+    # (would mean star hit)
+            
+    plt.figure(figsize=(8,8))
+    plt.imshow(data_sub,norm=norm,cmap='gray_r')
+    target_aperture.plot(color='blue', lw=1.5, alpha=0.5)
+    background_aperture.plot(color='yellow',lw=1.5)
+    #plt.scatter(img.shape[0]/2,img.shape[1]/2,s=100,marker='x')
+    plt.scatter(target_aperture_params["position"][0],target_aperture_params["position"][1],s=100,marker='+')
+    plt.scatter(background_aperture_params["position"][0],background_aperture_params["position"][1],s=50,marker='.',c='yellow')
+    plt.xlim(target_aperture_params["position"][0]-20,target_aperture_params["position"][0]+20)
+    plt.ylim(target_aperture_params["position"][1]-20,target_aperture_params["position"][1]+20)
+
+        
+
+    figname = 'aperture_extraction.png'
+    plt.savefig(figname)
+    plt.close()
+    extraction_results = {
+        "aperture_flux": target_flux,
+        "aperture_fluxerr": target_fluxerr,
+        "aperture_figure": figname
+    }
+
+    return extraction_results
 

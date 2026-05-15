@@ -239,3 +239,324 @@ paths:
 
         "500":
           description: Internal server error
+  /subtract_median_background:
+    post:
+      tags:
+      - Background Estimation
+      operationId: catch_analysis_tools.app.services.subtract_median_background.perform_median_subtraction
+      summary: "Compute the median background with source masking, saving the background-subtracted image as a new FITS file."
+      parameters:
+        - name: url
+          in: query
+          description: "Cutout URL from CATCH query"
+          example: "https://sbnsurveys.astro.umd.edu/api/images/urn:nasa:pds:gbo.ast.atlas.survey.258:59185:01a59185o0401o.fits?ra=13.46483&dec=15.80546&size=0.16deg&format=fits"
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Background-subtracted image saved as a new FITS file.
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Path to the background-subtracted FITS file.
+                properties:
+                  background_subtracted_image_path:
+                    description: Path to the background-subtracted FITS file.
+                    type: string
+  /get_world_coordinates:
+    post:
+      tags:
+      - Target Search
+      operationId: catch_analysis_tools.app.services.photometry.get_world_coordinates
+      summary: "Retrieve the RA and Dec in decimal degrees from an (x,y) pixel location, using a supplied WCS file."
+      parameters:
+        - name: WCS_file
+          in: query
+          description: "WCS file, can be CATCH-generated query URL, a .fits image, or a .wcs file."
+          example: "https://sbnsurveys.astro.umd.edu/api/images/urn:nasa:pds:gbo.ast.atlas.survey.258:59185:01a59185o0401o.fits?ra=13.46483&dec=15.80546&size=0.16deg&format=fits"
+          required: true
+          schema:
+            type: string
+        - name: x
+          in: query
+          description: "Pixel x location."
+          example: 154
+          required: true
+          schema:
+            type: number
+        - name: y
+          in: query
+          description: "Pixel y location."
+          example: 154
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        description: Parameters for pixel-to-world coordinate transformation.
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - WCS_file
+                - x
+                - y
+              properties:
+                WCS_file:
+                  type: string
+                  description: "Cutout URL from CATCH query"
+                  example: "https://sbnsurveys.astro.umd.edu/api/images/urn:nasa:pds:gbo.ast.atlas.survey.258:59185:01a59185o0401o.fits?ra=13.46483&dec=15.80546&size=0.16deg&format=fits"
+                x:
+                  type: number
+                  description: "Pixel x location."
+                  example: 154
+                y:
+                  type: number
+                  description: "Pixel y location."
+                  example: 154
+      responses:
+        "200":
+          description: Results of pixel-to-world transformation.
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Output from photometry.get_world_coordinates(). Contains input location and output WCS values.
+                properties:
+                  x:
+                    description: x pixel coordinate 
+                    type: number
+                  y:
+                    description: y pixel coordinate
+                    type: number
+                  ra:
+                    description: RA value of point in decimal degrees
+                    type: number
+                  dec:
+                    description: Dec value of point in decimal degrees
+                    type: number
+  /get_pixel_coordinates:
+    post:
+      tags:
+      - Target Search
+      operationId: catch_analysis_tools.app.services.photometry.get_pixel_coordinates
+      summary: "Retrieve the pixel (x,y) coordinates from RA and Dec world coordinates, using a supplied WCS file."
+      parameters:
+        - name: WCS_file
+          in: query
+          description: "WCS file, can be CATCH-generated query URL, a .fits image, or a .wcs file."
+          example: "https://sbnsurveys.astro.umd.edu/api/images/urn:nasa:pds:gbo.ast.atlas.survey.258:59185:01a59185o0401o.fits?ra=13.46483&dec=15.80546&size=0.16deg&format=fits"
+          required: true
+          schema:
+            type: string
+        - name: ra
+          in: query
+          description: "RA location in decimal degrees."
+          example: 13.46483
+          required: true
+          schema:
+            type: number
+        - name: dec
+          in: query
+          description: "Dec location in decimal degrees."
+          example: 15.80546
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Results of world-to-pixel transformation.
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Output from photometry.get_pixel_coordinates(). Contains input location and output pixel coordinates.
+                properties:
+                  x:
+                    description: x pixel coordinate 
+                    type: number
+                  y:
+                    description: y pixel coordinate
+                    type: number
+                  ra:
+                    description: RA value of point in decimal degrees
+                    type: number
+                  dec:
+                    description: Dec value of point in decimal degrees
+                    type: number
+  /target_photometry:
+    post:
+      tags:
+      - Photometry
+      operationId: catch_analysis_tools.app.services.photometry.target_extraction
+      summary: "Perform aperture photometry on a target using specified target and background aperture configurations."
+      requestBody:
+        required: true
+        description: Image and aperture parameters for photometry extraction.
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - file
+                - target_aperture_params
+                - background_aperture_params
+              properties:
+                file:
+                  type: string
+                  description: "URL or file path of FITS image from CATCH-generated query."
+                  example: "https://sbnsurveys.astro.umd.edu/api/images/urn:nasa:pds:gbo.ast.atlas.survey.258:59185:01a59185o0401o.fits?ra=13.46483&dec=15.80546&size=0.16deg&format=fits"
+                target_aperture_params:
+                  type: object
+                  description: "Configuration for the target aperture."
+                  required:
+                    - shape
+                    - position
+                    - size
+                  properties:
+                    shape:
+                      type: string
+                      description: "Shape of aperture (Circular, Rectangular or Circular_Annulus)."
+                      example: "Circular"
+                    position:
+                      type: array
+                      description: "Pixel coordinate pair [x, y] for the aperture center."
+                      items:
+                        type: number
+                      minItems: 2
+                      maxItems: 2
+                      example: [154, 154]
+                    size:
+                      type: number
+                      description: "Aperture size (radius in pixels) for circular apertures."
+                      example: 2
+                    inner_r:
+                      type: number
+                      description: "Inner radius for annulus aperture (pixels)."
+                      example: 0
+                    outer_r:
+                      type: number
+                      description: "Outer radius for annulus aperture (pixels)."
+                      example: 0
+                background_aperture_params:
+                  type: object
+                  description: "Configuration for the background aperture."
+                  required:
+                    - shape
+                    - position
+                    - size
+                  properties:
+                    shape:
+                      type: string
+                      description: "Shape of aperture (Circular, Rectangular or Circular_Annulus)."
+                      example: "Circular_Annulus"
+                    position:
+                      type: array
+                      description: "Pixel coordinate pair [x, y] for the aperture center."
+                      items:
+                        type: number
+                      minItems: 2
+                      maxItems: 2
+                      example: [154, 154]
+                    size:
+                      type: number
+                      description: "Aperture size (radius in pixels) for circular apertures."
+                      example: 5
+                    inner_r:
+                      type: number
+                      description: "Inner radius for annulus aperture (pixels)."
+                      example: 5
+                    outer_r:
+                      type: number
+                      description: "Outer radius for annulus aperture (pixels)."
+                      example: 20
+      responses:
+        "200":
+          description: Photometry results including flux measurements and visualization.
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Output from photometry extraction with aperture flux and uncertainties.
+                properties:
+                  aperture_flux:
+                    description: Target flux measured within the target aperture.
+                    type: number
+                  aperture_fluxerr:
+                    description: Uncertainty in the aperture flux measurement.
+                    type: number
+                  aperture_figure:
+                    description: File path to the output plot showing apertures on the cutout image.
+                    type: string
+  /centroid:
+    post:
+      tags:
+      - Target Search
+      operationId: catch_analysis_tools.app.services.photometry.centroid
+      summary: "Find nearest target centroid to a user-specified point, with user-specified search radius."
+      parameters:
+        - name: file
+          in: query
+          description: "Filename of image taken from CATCH-generated query URL."
+          example: "https://sbnsurveys.astro.umd.edu/api/images/urn:nasa:pds:gbo.ast.atlas.survey.258:59185:01a59185o0401o.fits?ra=13.46483&dec=15.80546&size=0.16deg&format=fits"
+          required: true
+          schema:
+            type: string
+        - name: target_x
+          in: query
+          description: "Target pixel x value, to be used as initial guess for the object."
+          example: "155"
+          required: true
+          schema:
+            type: number
+        - name: target_y
+          in: query
+          description: "Target pixel y value, to be used as initial guess for the object."
+          example: "155"
+          required: true
+          schema:
+            type: number
+        - name: search_radius
+          in: query
+          description: "Radius in pixels of search area (centered on (target_x,target_y) ) for centroiding."
+          example: "7"
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Calibrated magnitude array from chosen aperture photometry settings, and output plot showing the aperture on the cutout
+          content:
+            application/json:
+              schema:
+                type: array
+                description: Magnitude from source flux with asymmetric uncertainties.
+                items:
+                  type: object
+                  description: Output from photometry.centroid_location(). Array containing search input parameters (initial guess, search radius) and final centroided location.
+                  properties:
+                    init_guess_x:
+                      description: x pixel coordinate of guess
+                      type: number
+                    init_guess_y:
+                      description: y pixel coordinate of guess
+                      type: number
+                    search_radius:
+                      description: Radius in pixels for source search
+                      type: number
+                    cent_x:
+                      description: x pixel coordinate of centroided source
+                      type: number
+                    cent_y:
+                      description: y pixel coordinate of centroided source
+                      type: number
+                  type: object
+                  description: Cutout image showing selected target centroid in the cutout image.
+                  properties:
+                    centroid_figure:
+                      description: Location of centroid plot.
+                      type: string
+                      
