@@ -26,6 +26,10 @@ from catch_analysis_tools.app.services.astrometry import (
 logger = logging.getLogger(__name__)
 
 
+def json_response(payload, status):
+    return Response(json.dumps(payload), status=status, mimetype="application/json")
+
+
 def do_astrometry(body):
     """Handle POST /astrometry and translate service results to HTTP responses."""
     if not is_astrometry_ready():
@@ -72,6 +76,11 @@ def do_astrometry(body):
             results = run_pipeline(tmp_path, cfg)
 
             stage = "build_response"
+            if results.get("status") == "partial_success":
+                results["request_id"] = request_id
+                results["image_url"] = image_url
+                return results, 200, {"Content-Type": "application/json"}
+
             if return_plot:
                 if plot_type not in results.get("plots", {}):
                     raise BadRequest(f"Unknown plot_type: {plot_type}")
@@ -79,13 +88,28 @@ def do_astrometry(body):
                 image_bytes = base64.b64decode(results["plots"][plot_type])
                 return Response(image_bytes, mimetype="image/png")
 
+            results["request_id"] = request_id
             return results, 200, {"Content-Type": "application/json"}
         finally:
             os.remove(tmp_path)
     except AstrometryValidationError as exc:
-        raise BadRequest(str(exc))
-    except BadRequest:
-        raise
+        payload = {
+            "status": "bad_request",
+            "message": str(exc),
+            "request_id": request_id,
+            "stage": stage,
+            "image_url": image_url,
+        }
+        return json_response(payload, 400)
+    except BadRequest as exc:
+        payload = {
+            "status": "bad_request",
+            "message": exc.description,
+            "request_id": request_id,
+            "stage": stage,
+            "image_url": image_url,
+        }
+        return json_response(payload, 400)
     except AstrometrySolveError as exc:
         logger.warning(
             "Astrometry solve did not produce WCS "
@@ -99,10 +123,13 @@ def do_astrometry(body):
         payload = {
             "status": "solve_failed",
             "message": str(exc),
+            "error_type": type(exc).__name__,
             "request_id": request_id,
+            "stage": stage,
+            "image_url": image_url,
         }
-        return Response(json.dumps(payload), status=422, mimetype="application/json")
-    except Exception:
+        return json_response(payload, 422)
+    except Exception as exc:
         logger.exception(
             "Astrometry request failed "
             "[request_id=%s stage=%s image_url=%r return_plot=%r plot_type=%r]",
@@ -112,4 +139,12 @@ def do_astrometry(body):
             return_plot,
             plot_type,
         )
-        raise
+        payload = {
+            "status": "error",
+            "message": str(exc),
+            "error_type": type(exc).__name__,
+            "request_id": request_id,
+            "stage": stage,
+            "image_url": image_url,
+        }
+        return json_response(payload, 500)
