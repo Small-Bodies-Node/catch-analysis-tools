@@ -281,14 +281,14 @@ paths:
             type: string
         - name: x
           in: query
-          description: "Pixel x location."
+          description: "Pixel x location (0-indexed)."
           example: 154
           required: true
           schema:
             type: number
         - name: y
           in: query
-          description: "Pixel y location."
+          description: "Pixel y location (0-indexed)."
           example: 154
           required: true
           schema:
@@ -376,10 +376,10 @@ paths:
                 description: Output from photometry.get_pixel_coordinates(). Contains input location and output pixel coordinates.
                 properties:
                   x:
-                    description: x pixel coordinate 
+                    description: x pixel coordinate (0-indexed) 
                     type: number
                   y:
-                    description: y pixel coordinate
+                    description: y pixel coordinate (0-indexed)
                     type: number
                   ra:
                     description: RA value of point in decimal degrees
@@ -423,7 +423,7 @@ paths:
                       example: "Circular"
                     position:
                       type: array
-                      description: "Pixel coordinate pair [x, y] for the aperture center."
+                      description: "Zero-indexed pixel coordinate pair [x, y] for the aperture center."
                       items:
                         type: number
                       minItems: 2
@@ -455,7 +455,7 @@ paths:
                       example: "Circular_Annulus"
                     position:
                       type: array
-                      description: "Pixel coordinate pair [x, y] for the aperture center."
+                      description: "Zero-indexed pixel coordinate pair [x, y] for the aperture center."
                       items:
                         type: number
                       minItems: 2

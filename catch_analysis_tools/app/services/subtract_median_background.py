@@ -1,10 +1,21 @@
 import os
 import requests
 from astropy.io import fits
-from catch_analysis_tools.background import global_subtraction
-from catch_analysis_tools.photometry import get_image
+from ...background import global_subtraction
+from ...photometry import get_image
 
 def download_file(url):
+    """
+    Downloads a file from a given URL and saves it locally, returning the base filename (without extension).
+    Parameters:
+    ----------
+    url: str
+        URL to the file to be downloaded
+    Returns:
+    -------
+    file_base: str
+        Base filename (without extension) of the downloaded file
+    """
     response = requests.get(url)
     if "content-disposition" in response.headers:
         content_disposition = response.headers["content-disposition"]

@@ -116,7 +116,9 @@ def create_user_aperture(position,size):
     return aperture
 
 def define_aperture(aperture_params):
-    # Defines an aperture from user supplied parameters, used both to create target and background apertires
+    """
+    Defines an aperture from user supplied parameters, used both to create target and background apertures
+    """
     if aperture_params["shape"]=="Circular":
         aperture = CircularAperture(aperture_params["position"], r=aperture_params["size"])
     elif aperture_params["shape"]=="Circular_Annulus":

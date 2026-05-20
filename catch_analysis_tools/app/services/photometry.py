@@ -1,25 +1,19 @@
 import os
-from catch_analysis_tools.photometry import get_image,subpixel_centroid,create_user_aperture,define_aperture,do_aperture_photometry,source_instr_mag,calibrated_mag
-from catch_analysis_tools.background import calc_bkg
+from ...photometry import get_image,subpixel_centroid,define_aperture,do_aperture_photometry
 from astropy.wcs import WCS
 import matplotlib
 matplotlib.use('Agg') 
 from matplotlib import pyplot as plt
 from astropy.visualization import ZScaleInterval
 from astropy.visualization.mpl_normalize import ImageNormalize
-import numpy as np
 from astropy import units as u
 from astropy.coordinates import SkyCoord, ICRS
 from astropy.io import fits
-from catch_analysis_tools.background import global_subtraction
 
 def get_world_coordinates(WCS_file,x,y):
     """
-    Accepts an astropy-readable WCS object (a .wcs or fits file ) and outputs the world coordinates of an (x,y) pixel point in decimal degrees.
+    Accepts an astropy-readable WCS object (a .wcs or fits file ) and outputs the world coordinates of a 0-indexed (x,y) pixel point in decimal degrees.
     """
-    #WCS_file = body['WCS_file']
-    #x = body['x']
-    #y = body['y']
     world_coords = WCS(fits.open(WCS_file)[0].header)
     loc = world_coords.pixel_to_world(x,y)
     print(loc)
@@ -33,11 +27,8 @@ def get_world_coordinates(WCS_file,x,y):
 
 def get_pixel_coordinates(WCS_file,ra,dec):
     """
-    Accepts an astropy-readable WCS object (a .wcs or fits file) and outputs the (x,y) pixel coordinates of an (ra,dec) point in decimal degrees.
+    Accepts an astropy-readable WCS object (a .wcs or fits file) and outputs the 0-indexed (x,y) pixel coordinates of an (ra,dec) point in decimal degrees.
     """
-    #WCS_file = body['WCS_file']
-    #ra = body['ra']
-    #dec = body['dec']
     world_coords = WCS(fits.open(WCS_file)[0].header)
     sky_loc = SkyCoord(ICRS(ra=ra*u.deg, dec=dec*u.deg))
     loc = world_coords.world_to_pixel(sky_loc)
@@ -83,16 +74,9 @@ def centroid(file,target_x,target_y,search_radius):
                     Output plot showing the default aperture + annulus extraction onto the cutout image.
     """
 
-    
-    #tmp_wcs = WCS(file+'.wcs')
     img, header = get_image(file)
 
-    #target_pix = get_WCS_pixel(tmp_wcs,target_ra,target_dec)
-    #target_x = target_pix[0].item()
-    #target_y = target_pix[1].item()
-
     cent_pix = subpixel_centroid([target_x,target_y],img,search_radius)
-    #cent_loc = get_pixel_WCS(tmp_wcs,cent_pix[0],cent_pix[1])
     
     search_results = {
         "init_guess_x":target_x,
@@ -101,8 +85,7 @@ def centroid(file,target_x,target_y,search_radius):
         "cent_x":cent_pix[0],
         "cent_y":cent_pix[1],
     }
-    print(search_results)
-    interval = ZScaleInterval()
+    
     norm = ImageNormalize(img, interval=ZScaleInterval())
 
             
@@ -117,7 +100,7 @@ def centroid(file,target_x,target_y,search_radius):
 
         
 
-    file_base = os.path.splitext(file)[0]
+    
     figname = 'centroid.png'
     plt.savefig(figname)
     plt.close()
@@ -145,40 +128,26 @@ def target_extraction(body):
     target_aperture_params = body['target_aperture_params']
     background_aperture_params = body['background_aperture_params']
 
-
-    #tmp_wcs = WCS(filebase+'.wcs')
     img, header = get_image(file)
+    
 
 
-    data_sub, twoD_bkg = global_subtraction(img)
-    file_base = os.path.splitext(file)[0]
-    #targ_loc = get_WCS_pixel(tmp_wcs,target_ra,target_dec)
-
-    #centroid_results = centroid_location(filebase,target_x,target_y,search_radius)
-    #targ_cent = np.array([centroid_results["search_results"]["cent_x"],centroid_results["search_results"]["cent_y"]])
+    
 
     target_aperture = define_aperture(target_aperture_params)
     background_aperture = define_aperture(background_aperture_params)
 
-    interval = ZScaleInterval()
-    norm = ImageNormalize(data_sub, interval=ZScaleInterval())
-
-    bkg, bkg_var = calc_bkg(data_sub,background_aperture,'median',None)
+    norm = ImageNormalize(img, interval=ZScaleInterval())
             
     target_flux, target_fluxerr = do_aperture_photometry(img,target_aperture,background_aperture)
-    #instr_mag = source_instr_mag(aperture_flux,aperture_fluxerr,1)
-    #cal_mag = calibrated_mag(instr_mag,header['zp'],header['zp_std']) # temporarily using the original Atlas header values
-
-    #cal_mag_array = calibrated_mag(instr_mag,header['magzpt'],header['zprms'])
     
     # could put code to filter out frames where targ_loc and targ_cent vary by more than a couple pixels here
     # (would mean star hit)
             
     plt.figure(figsize=(8,8))
-    plt.imshow(data_sub,norm=norm,cmap='gray_r')
+    plt.imshow(img,norm=norm,cmap='gray_r')
     target_aperture.plot(color='blue', lw=1.5, alpha=0.5)
     background_aperture.plot(color='yellow',lw=1.5)
-    #plt.scatter(img.shape[0]/2,img.shape[1]/2,s=100,marker='x')
     plt.scatter(target_aperture_params["position"][0],target_aperture_params["position"][1],s=100,marker='+')
     plt.scatter(background_aperture_params["position"][0],background_aperture_params["position"][1],s=50,marker='.',c='yellow')
     plt.xlim(target_aperture_params["position"][0]-20,target_aperture_params["position"][0]+20)
