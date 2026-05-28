@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 from pytest import approx
-
+from ..photometry import define_aperture
 from ..background import *
 
 def test_global_subtraction():
@@ -21,8 +21,9 @@ def test_get_background():
     bkg = get_background(data)
     assert np.mean(bkg.background) == 1.0
 
-def test_calc_annulus_bkg():
+def test_calc_bkg():
     import photutils.datasets
     noise = photutils.datasets.make_noise_image((100,100), distribution='gaussian', mean=5, stddev=1, seed=1)
-    bkg_median, bkg_var, annulus_aperture = calc_annulus_bkg(noise,(50,50),1,40)
+    bkg_aperture = define_aperture({"shape":"Circular_Annulus","position":[50,50],"size":5,"inner_r":1,"outer_r":40})
+    bkg_median, bkg_var= calc_bkg(noise,bkg_aperture,"median",sigma_clip=None)
     assert approx([bkg_median,bkg_var]) == [4.990637730701752, 0.9217670741324576]
