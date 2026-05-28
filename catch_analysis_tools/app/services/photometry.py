@@ -14,7 +14,17 @@ def get_world_coordinates(WCS_file,x,y):
     """
     Accepts an astropy-readable WCS object (a .wcs or fits file ) and outputs the world coordinates of a 0-indexed (x,y) pixel point in decimal degrees.
     """
-    world_coords = WCS(fits.open(WCS_file)[0].header)
+    try:
+        world_coords = WCS(fits.open(WCS_file)[0].header)
+    except Exception as e:
+        try:
+            world_coords = WCS(WCS_file)
+        except Exception as e:
+            try:
+                world_coords = WCS_file
+            except Exception as e:
+                raise ValueError("Could not read WCS file. Please ensure that the file is either a .wcs file or a .fits file with a valid WCS solution in the header.")
+    
     loc = world_coords.pixel_to_world(x,y)
     print(loc)
     transform_results = {
@@ -29,7 +39,17 @@ def get_pixel_coordinates(WCS_file,ra,dec):
     """
     Accepts an astropy-readable WCS object (a .wcs or fits file) and outputs the 0-indexed (x,y) pixel coordinates of an (ra,dec) point in decimal degrees.
     """
-    world_coords = WCS(fits.open(WCS_file)[0].header)
+    try:
+        world_coords = WCS(fits.open(WCS_file)[0].header)
+    except Exception as e:
+        try:
+            world_coords = WCS(WCS_file)
+        except Exception as e:
+            try:
+                world_coords = WCS_file
+            except Exception as e:
+                raise ValueError("Could not read WCS file. Please ensure that the file is either a .wcs file or a .fits file with a valid WCS solution in the header.")
+    
     sky_loc = SkyCoord(ICRS(ra=ra*u.deg, dec=dec*u.deg))
     loc = world_coords.world_to_pixel(sky_loc)
     x = loc[0].item()
