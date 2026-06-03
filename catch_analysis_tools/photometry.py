@@ -9,8 +9,8 @@ from photutils.utils import circular_footprint
 from astropy.convolution import convolve
 from astropy.coordinates import SkyCoord, ICRS
 from astropy.wcs import WCS
-from photutils.aperture import aperture_photometry, CircularAnnulus, CircularAperture
-from photutils.centroids import centroid_quadratic, centroid_sources, centroid_com
+from photutils.aperture import aperture_photometry, CircularAnnulus, CircularAperture, RectangularAperture
+from photutils.centroids import centroid_quadratic, centroid_sources
 from astropy import units as u
 
 # here are functions for grabbing the data, doing background subtractions and manipulating source extractions
@@ -115,6 +115,22 @@ def create_user_aperture(position,size):
     aperture = CircularAperture(position, r=size)
     return aperture
 
+def define_aperture(aperture_params):
+    """
+    Defines an aperture from user supplied parameters, used both to create target and background apertures
+    """
+    if aperture_params["shape"]=="Circular":
+        aperture = CircularAperture(aperture_params["position"], r=aperture_params["size"])
+    elif aperture_params["shape"]=="Circular_Annulus":
+        aperture = CircularAnnulus(aperture_params["position"], r_in=aperture_params["inner_r"], r_out=aperture_params["outer_r"])
+    elif aperture_params["shape"]=="Rectangular":
+        aperture = RectangularAperture(aperture_params["position"], aperture_params["w"], aperture_params["h"], theta=aperture_params["theta"])
+    else:
+        aperture = 0
+    return aperture
+
+        
+
 def subpixel_centroid(user_point,data,radius):
 
     """Takes in a user defined point and returns the location of the brightest pixel within radius pixels
@@ -141,12 +157,12 @@ def subpixel_centroid(user_point,data,radius):
 
     footprint = circular_footprint(radius)
     x, y = centroid_sources(data, user_point[0], user_point[1], footprint=footprint,
-                            centroid_func=centroid_com)
+                            centroid_func=centroid_quadratic)
     
     target_position = np.array([x[0],y[0]])
     return target_position
         
-def do_aperture_photometry(data,source_aperture,bkg_median, bkg_var, bkg_aperture):
+def do_aperture_photometry(data,source_aperture, bkg_aperture):
     """ Takes in an image, a source aperture, and outputs from the calc_annulus_bkg function
      
         Returns the source flux (background subtracted, per-pixel background median) and the
@@ -186,16 +202,21 @@ def do_aperture_photometry(data,source_aperture,bkg_median, bkg_var, bkg_apertur
     aperture_mask = source_aperture.to_mask(method='center')
     aperture_data = aperture_mask.multiply(data)
     aperture_sum = np.nansum(aperture_data)
-    
-    background = bkg_median * source_aperture.area
-    source_sum = aperture_sum-background
+    aperture_area = np.nansum(aperture_mask)
 
+    bkg_mask = bkg_aperture.to_mask(method='center')
+    bkg_area = np.nansum(bkg_mask)
+    bkg_data = bkg_mask.multiply(data)
+    bkg_median = np.nanmedian(bkg_data)
+    bkg_var = np.nanvar(bkg_data[bkg_data != 0])
+    background = bkg_median * aperture_area
+    source_sum = aperture_sum-background
     
     # Using uncertainty as derived by https://wise2.ipac.caltech.edu/staff/fmasci/ApPhotUncert.pdf
     # Setting the gain g=1, N_i = 1. Assumes data has already been converted to e-
     ### TODO: FIND THE GAINS FOR EACH SURVEY
     term1 = source_sum
-    term2 = (source_aperture.area + (np.pi/2) * (np.square(source_aperture.area)/bkg_aperture.area) )*bkg_var
+    term2 = (aperture_area + (np.pi/2) * (np.square(aperture_area)/bkg_area) )*bkg_var
     source_err = np.sqrt(term1 + term2)
     
     return source_sum, source_err
@@ -228,51 +249,6 @@ def load_thumbnail(url):
     header = fits_hdu[0].header
     img_WCS = WCS(header)
     return data, header, img_WCS
-
-def get_pixel_WCS(img_WCS,pixel):
-    """Retrieve WCS location of a pixel given its (x,y) position
-
-    Parameters
-    ----------
-    
-    img_WCS: 
-             Astropy WCS object
-
-    pixel: array_like
-           [x,y] pixel location to get WCS location of
-
-
-    Returns
-    -------
-    loc: 
-         Astropy SkyCoord location of desired pixel
-    """
-    
-    loc = img_WCS.pixel_to_world(pixel[0],pixel[1])
-    return loc
-
-def get_WCS_pixel(img_WCS,ra_dec):
-    """Retrieve pixel location at a given (RA, Dec) sky coordinate position
-
-    Parameters
-    ----------
-    
-    img_WCS: 
-             Astropy WCS object
-
-    ra_dec: array_like
-           [Right Ascension, Declination] location to retrieve pixel location of
-
-    Returns
-    -------
-
-    loc: array_like
-         Pixel location of specified (RA, Dec)
-    """
-
-    sky_loc = SkyCoord(ICRS(ra=ra_dec[0]*u.deg, dec=ra_dec[1]*u.deg))
-    loc = img_WCS.world_to_pixel(sky_loc)
-    return loc
     
 def source_instr_mag(ap_flux,ap_fluxerr,exposure_time):
 
@@ -341,7 +317,10 @@ def calibrated_mag(instr_mag_array,zero_point,zero_point_uncert):
     calib_mag = zero_point+instr_mag_array[0]
     calib_mag_hi = np.sqrt(np.square(zero_point_uncert) + np.square(instr_mag_array[1]))
     calib_mag_lo = np.sqrt(np.square(zero_point_uncert) + np.square(instr_mag_array[2]))
-    
-    calib_mag_array = np.array([calib_mag,calib_mag_hi,calib_mag_lo])
+    calib_mag_array = {
+        "cal_mag": calib_mag,
+        "cal_mag_hi_uncert": calib_mag_hi,
+        "cal_mag_lo_uncert": calib_mag_lo
+    }
     return calib_mag_array    
 
