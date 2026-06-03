@@ -77,13 +77,11 @@ def global_subtraction(data):
 
     return data_sub, bkg    
 
-def calc_annulus_bkg(data,position,inner_r,outer_r):
+def calc_bkg(data,background_aperture,method,sigma_clip):
     
-    """ Takes in an image array and position + inner/outer radii for a circular annulus
-        Computes and returns background median, variance from pixels within this annulus
-     
-        Currently exports the annulus object, too, although this might not be necessary
-
+    """ Takes in an image array and aperture for background estimate. Determines background 
+        estimator per specified method (mean or median) and variance of pixels, with optional
+        sigma clipping.
 
 
     Parameters
@@ -102,33 +100,45 @@ def calc_annulus_bkg(data,position,inner_r,outer_r):
 
     Returns
     -------
-    bkg_median : float
-                 median value of pixels within the annulus
+    bkg_estimator : float
+                    estimate of true background level in background aperture, per "method"
     
     bkg_var : float
-              variance of pixels within the annulus, as square of range of values from 50-16th percentiles
-
-    annulus_aperture : 
-                       Photutils annulus aperture object with the specified size, location parameters
-
+              Variance of pixels within the background aperture. If sigma clipped, square of 
+              clipped stddev. Otherwise, as square of range of values from 50-16th percentiles
 
     """
-    annulus_aperture = CircularAnnulus(position, r_in=inner_r, r_out=outer_r)
-    annulus_mask = annulus_aperture.to_mask(method='center')
     
-    annulus_data = annulus_mask.multiply(data)
-    annulus_data_1d = annulus_data[annulus_mask.data > 0]
+    background_mask = background_aperture.to_mask(method='center')
+    
+    background_data = background_mask.multiply(data)
+    background_data_1d = background_data[background_mask.data > 0]
     
     
+    #Todo: Add flexibility for the stats for computing background. Include rectangular aperture.
+    if sigma_clip is not None:
+        bkg_mean,bkg_median,bkg_stddev = sigma_clipped_stats(background_data_1d, sigma=sigma_clip, maxiters=10)
+        bkg_var = bkg_stddev**2
+    else:
+        bkg_median = np.nanmedian(background_data_1d)
+        bkg_mean = np.nanmean(background_data_1d)
+        # robust approximation via https://wise2.ipac.caltech.edu/staff/fmasci/ApPhotUncert.pdf
+        bkg_var = np.square(np.percentile(background_data_1d,50)-np.percentile(background_data_1d,16))
+        bkg_stddev = np.sqrt(bkg_var)
     
-    bkg_median = np.nanmedian(annulus_data_1d)
-    # robust approximation via https://wise2.ipac.caltech.edu/staff/fmasci/ApPhotUncert.pdf
-    bkg_var = np.square(np.percentile(annulus_data_1d,50)-np.percentile(annulus_data_1d,16))
+    if method=='mean':
+        bkg_estimator = bkg_mean
+    elif method=='median':
+        bkg_estimator = bkg_median
+    else:
+        raise ValueError("Method must be 'mean' or 'median'")
+
     
+    #plt.figure(figsize=(8,8))
     # optional code to check the standard deviation estimate of the background
-    plt.axvspan(bkg_median-np.sqrt(bkg_var),bkg_median+np.sqrt(bkg_var),alpha=0.5)
-    plt.axvline(bkg_median)
-    plt.hist(annulus_data_1d)
+    #plt.axvspan(bkg_estimator-bkg_stddev,bkg_estimator+bkg_stddev,alpha=0.5)
+    #plt.axvline(bkg_estimator,color='red')
+    #plt.hist(annulus_data_1d)
     
     
-    return bkg_median, bkg_var, annulus_aperture
+    return bkg_estimator, bkg_var
