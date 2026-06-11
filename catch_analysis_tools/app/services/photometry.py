@@ -1,5 +1,6 @@
 import os
 from ...photometry import get_image,subpixel_centroid,define_aperture,do_aperture_photometry
+from .generated_images import upload_figure_png
 from astropy.wcs import WCS
 import matplotlib
 matplotlib.use('Agg') 
@@ -102,31 +103,32 @@ def centroid(file,target_x,target_y,search_radius):
         "init_guess_x":target_x,
         "init_guess_y":target_y,
         "search_radius":search_radius,
-        "cent_x":cent_pix[0],
-        "cent_y":cent_pix[1],
+        "cent_x":float(cent_pix[0]),
+        "cent_y":float(cent_pix[1]),
     }
     
     norm = ImageNormalize(img, interval=ZScaleInterval())
 
             
-    plt.figure(figsize=(8,8))
-    plt.imshow(img,norm=norm,cmap='gray_r')
-    plt.scatter(img.shape[0]/2,img.shape[1]/2,s=100,marker='x',label='Image Center')
-    plt.scatter(target_x,target_y,s=100,marker='+',label='Initial Guess')
-    plt.scatter(cent_pix[0],cent_pix[1],s=50,marker='.',c='yellow',label='Centroid Location')
-    plt.xlim(target_x-20,target_x+20)
-    plt.ylim(target_y-20,target_y+20)
-    plt.legend()
+    fig, ax = plt.subplots(figsize=(8,8))
+    ax.imshow(img,norm=norm,cmap='gray_r')
+    ax.scatter(img.shape[0]/2,img.shape[1]/2,s=100,marker='x',label='Image Center')
+    ax.scatter(target_x,target_y,s=100,marker='+',label='Initial Guess')
+    ax.scatter(cent_pix[0],cent_pix[1],s=50,marker='.',c='yellow',label='Centroid Location')
+    ax.set_xlim(target_x-20,target_x+20)
+    ax.set_ylim(target_y-20,target_y+20)
+    ax.legend()
 
         
 
     
-    figname = 'centroid.png'
-    plt.savefig(figname)
-    plt.close()
+    uploaded_figure = upload_figure_png(fig, "centroid", "centroid.png")
+    plt.close(fig)
     centroid_results = {
         "search_results": search_results,
-        "centroid_figure": figname
+        "centroid_figure": uploaded_figure["url"],
+        "centroid_figure_url": uploaded_figure["url"],
+        "centroid_figure_s3_key": uploaded_figure["key"],
     }
 
     return centroid_results
@@ -164,25 +166,25 @@ def target_extraction(body):
     # could put code to filter out frames where targ_loc and targ_cent vary by more than a couple pixels here
     # (would mean star hit)
             
-    plt.figure(figsize=(8,8))
-    plt.imshow(img,norm=norm,cmap='gray_r')
-    target_aperture.plot(color='blue', lw=1.5, alpha=0.5)
-    background_aperture.plot(color='yellow',lw=1.5)
-    plt.scatter(target_aperture_params["position"][0],target_aperture_params["position"][1],s=100,marker='+')
-    plt.scatter(background_aperture_params["position"][0],background_aperture_params["position"][1],s=50,marker='.',c='yellow')
-    plt.xlim(target_aperture_params["position"][0]-20,target_aperture_params["position"][0]+20)
-    plt.ylim(target_aperture_params["position"][1]-20,target_aperture_params["position"][1]+20)
+    fig, ax = plt.subplots(figsize=(8,8))
+    ax.imshow(img,norm=norm,cmap='gray_r')
+    target_aperture.plot(color='blue', lw=1.5, alpha=0.5, ax=ax)
+    background_aperture.plot(color='yellow',lw=1.5, ax=ax)
+    ax.scatter(target_aperture_params["position"][0],target_aperture_params["position"][1],s=100,marker='+')
+    ax.scatter(background_aperture_params["position"][0],background_aperture_params["position"][1],s=50,marker='.',c='yellow')
+    ax.set_xlim(target_aperture_params["position"][0]-20,target_aperture_params["position"][0]+20)
+    ax.set_ylim(target_aperture_params["position"][1]-20,target_aperture_params["position"][1]+20)
 
         
 
-    figname = 'aperture_extraction.png'
-    plt.savefig(figname)
-    plt.close()
+    uploaded_figure = upload_figure_png(fig, "target-photometry", "aperture_extraction.png")
+    plt.close(fig)
     extraction_results = {
-        "aperture_flux": target_flux,
-        "aperture_fluxerr": target_fluxerr,
-        "aperture_figure": figname
+        "aperture_flux": float(target_flux),
+        "aperture_fluxerr": float(target_fluxerr),
+        "aperture_figure": uploaded_figure["url"],
+        "aperture_figure_url": uploaded_figure["url"],
+        "aperture_figure_s3_key": uploaded_figure["key"],
     }
 
     return extraction_results
-

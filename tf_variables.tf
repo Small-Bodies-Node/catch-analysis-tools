@@ -113,3 +113,15 @@ variable "CAT_ARCHITECTURE" {
     error_message = "CAT_ARCHITECTURE must be either x86_64 or arm64."
   }
 }
+
+variable "CAT_IMAGES_BUCKET_NAME" {
+  description = "Public S3 bucket name for generated CAT route images. Must be globally unique and lowercase."
+  type        = string
+  default     = "sbn-cat-images"
+}
+
+variable "CAT_IMAGES_PREFIX" {
+  description = "S3 key prefix used for generated CAT route images"
+  type        = string
+  default     = "generated-images/"
+}
