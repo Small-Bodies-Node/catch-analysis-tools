@@ -35,6 +35,7 @@ locals {
   task_role_name         = substr("${local.name_prefix}ecs-task-role", 0, 64)
   cat_images_origin_id   = "${local.normalized_name_prefix}cat-images"
   cat_images_base_url    = "https://${aws_cloudfront_distribution.cat_images.domain_name}"
+  cat_images_bucket_name = coalesce(var.S3_BUCKET_NAME, var.CAT_IMAGES_BUCKET_NAME)
 }
 
 resource "aws_ecr_repository" "app" {
@@ -171,10 +172,10 @@ resource "aws_cloudwatch_log_group" "ecs" {
 }
 
 resource "aws_s3_bucket" "cat_images" {
-  bucket = var.CAT_IMAGES_BUCKET_NAME
+  bucket = local.cat_images_bucket_name
 
   tags = {
-    Name = var.CAT_IMAGES_BUCKET_NAME
+    Name = local.cat_images_bucket_name
   }
 }
 

@@ -120,6 +120,12 @@ variable "CAT_IMAGES_BUCKET_NAME" {
   default     = "sbn-cat-images"
 }
 
+variable "S3_BUCKET_NAME" {
+  description = "Compatibility alias for CAT_IMAGES_BUCKET_NAME. Prefer CAT_IMAGES_BUCKET_NAME for new configuration."
+  type        = string
+  default     = null
+}
+
 variable "CAT_IMAGES_PREFIX" {
   description = "S3 key prefix used for generated CAT route images"
   type        = string
