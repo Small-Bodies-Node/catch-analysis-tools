@@ -36,6 +36,7 @@ locals {
   cat_images_origin_id   = "${local.normalized_name_prefix}cat-images"
   cat_images_base_url    = "https://${aws_cloudfront_distribution.cat_images.domain_name}"
   cat_images_bucket_name = coalesce(var.S3_BUCKET_NAME, var.CAT_IMAGES_BUCKET_NAME)
+  cat_cache_bucket_name  = coalesce(var.CAT_CACHE_BUCKET_NAME, "${local.normalized_name_prefix}cache")
 }
 
 resource "aws_ecr_repository" "app" {
@@ -272,6 +273,50 @@ resource "aws_cloudfront_distribution" "cat_images" {
   }
 }
 
+resource "aws_s3_bucket" "cat_cache" {
+  bucket = local.cat_cache_bucket_name
+
+  tags = {
+    Name = local.cat_cache_bucket_name
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "cat_cache" {
+  bucket = aws_s3_bucket.cat_cache.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "cat_cache" {
+  bucket = aws_s3_bucket.cat_cache.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "cat_cache" {
+  bucket = aws_s3_bucket.cat_cache.id
+
+  rule {
+    id     = "expire-cat-route-cache"
+    status = "Enabled"
+
+    filter {
+      prefix = var.CAT_CACHE_PREFIX
+    }
+
+    expiration {
+      days = var.CAT_CACHE_RETENTION_DAYS
+    }
+  }
+}
+
 resource "aws_efs_file_system" "astrometry_data" {
   creation_token   = "${local.name_prefix}astrometry-data"
   performance_mode = var.EFS_PERFORMANCE_MODE
@@ -348,6 +393,25 @@ resource "aws_iam_role_policy" "ecs_task_cat_images" {
   })
 }
 
+resource "aws_iam_role_policy" "ecs_task_cat_cache" {
+  name = "${local.name_prefix}cat-cache"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject"
+        ]
+        Resource = "${aws_s3_bucket.cat_cache.arn}/${var.CAT_CACHE_PREFIX}*"
+      }
+    ]
+  })
+}
+
 resource "aws_ecs_cluster" "main" {
   name = local.cluster_name
 }
@@ -404,6 +468,14 @@ resource "aws_ecs_task_definition" "app" {
         {
           name  = "CAT_IMAGES_BASE_URL"
           value = local.cat_images_base_url
+        },
+        {
+          name  = "CAT_CACHE_BUCKET"
+          value = aws_s3_bucket.cat_cache.bucket
+        },
+        {
+          name  = "CAT_CACHE_PREFIX"
+          value = var.CAT_CACHE_PREFIX
         }
       ]
       mountPoints = [
@@ -434,6 +506,7 @@ resource "aws_ecs_task_definition" "app" {
   depends_on = [
     aws_iam_role_policy_attachment.ecs_task_execution_default,
     aws_iam_role_policy.ecs_task_cat_images,
+    aws_iam_role_policy.ecs_task_cat_cache,
     aws_efs_mount_target.astrometry_data,
   ]
 }

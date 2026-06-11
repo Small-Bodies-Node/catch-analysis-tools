@@ -214,6 +214,19 @@ paths:
                         type: string
                       image_overlay:
                         type: string
+                  cache:
+                    type: object
+                    description: S3 JSON result cache metadata. Present for JSON responses.
+                    properties:
+                      enabled:
+                        type: boolean
+                      hit:
+                        type: boolean
+                      key:
+                        type: string
+                        nullable: true
+                      error:
+                        type: string
 
             image/png:
               schema:
@@ -265,6 +278,19 @@ paths:
                   background_subtracted_image_path:
                     description: Path to the background-subtracted FITS file.
                     type: string
+                  cache:
+                    type: object
+                    description: S3 JSON result cache metadata.
+                    properties:
+                      enabled:
+                        type: boolean
+                      hit:
+                        type: boolean
+                      key:
+                        type: string
+                        nullable: true
+                      error:
+                        type: string
   /get_world_coordinates:
     post:
       tags:
@@ -338,6 +364,19 @@ paths:
                   dec:
                     description: Dec value of point in decimal degrees
                     type: number
+                  cache:
+                    type: object
+                    description: S3 JSON result cache metadata.
+                    properties:
+                      enabled:
+                        type: boolean
+                      hit:
+                        type: boolean
+                      key:
+                        type: string
+                        nullable: true
+                      error:
+                        type: string
   /get_pixel_coordinates:
     post:
       tags:
@@ -387,6 +426,19 @@ paths:
                   dec:
                     description: Dec value of point in decimal degrees
                     type: number
+                  cache:
+                    type: object
+                    description: S3 JSON result cache metadata.
+                    properties:
+                      enabled:
+                        type: boolean
+                      hit:
+                        type: boolean
+                      key:
+                        type: string
+                        nullable: true
+                      error:
+                        type: string
   /target_photometry:
     post:
       tags:
@@ -497,6 +549,19 @@ paths:
                   aperture_figure_s3_key:
                     description: S3 object key for the output plot.
                     type: string
+                  cache:
+                    type: object
+                    description: S3 JSON result cache metadata.
+                    properties:
+                      enabled:
+                        type: boolean
+                      hit:
+                        type: boolean
+                      key:
+                        type: string
+                        nullable: true
+                      error:
+                        type: string
   /centroid:
     post:
       tags:
@@ -569,4 +634,17 @@ paths:
                   centroid_figure_s3_key:
                     description: S3 object key for the centroid plot.
                     type: string
+                  cache:
+                    type: object
+                    description: S3 JSON result cache metadata.
+                    properties:
+                      enabled:
+                        type: boolean
+                      hit:
+                        type: boolean
+                      key:
+                        type: string
+                        nullable: true
+                      error:
+                        type: string
                       

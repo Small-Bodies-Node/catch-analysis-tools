@@ -42,3 +42,13 @@ output "cat_images_base_url" {
   description = "HTTPS base URL for generated CAT route images"
   value       = local.cat_images_base_url
 }
+
+output "cat_cache_bucket_name" {
+  description = "Private S3 bucket used for CAT route JSON result cache"
+  value       = aws_s3_bucket.cat_cache.bucket
+}
+
+output "cat_cache_prefix" {
+  description = "S3 key prefix used for CAT route JSON result cache"
+  value       = var.CAT_CACHE_PREFIX
+}

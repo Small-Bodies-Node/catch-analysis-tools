@@ -21,6 +21,7 @@ from catch_analysis_tools.app.services.astrometry import (
     run_pipeline,
     validate_and_normalize,
 )
+from catch_analysis_tools.app.services.result_cache import get_or_compute
 
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,23 @@ logger = logging.getLogger(__name__)
 
 def json_response(payload, status):
     return Response(json.dumps(payload), status=status, mimetype="application/json")
+
+
+def _run_astrometry_uncached(image_url, cfg):
+    try:
+        response = requests.get(image_url, timeout=60)
+        response.raise_for_status()
+    except requests.RequestException:
+        raise BadRequest("Could not retrieve FITS image")
+
+    with NamedTemporaryFile(suffix=".fits", delete=False) as tmp:
+        tmp.write(response.content)
+        tmp_path = tmp.name
+
+    try:
+        return run_pipeline(tmp_path, cfg)
+    finally:
+        os.remove(tmp_path)
 
 
 def do_astrometry(body):
@@ -59,39 +77,36 @@ def do_astrometry(body):
         return_plot = cfg["meta"]["return_plot"]
         plot_type = cfg["meta"]["plot_type"]
 
-        stage = "fetch_fits"
-        try:
-            response = requests.get(image_url, timeout=60)
-            response.raise_for_status()
-        except requests.RequestException:
-            raise BadRequest("Could not retrieve FITS image")
-
-        stage = "write_temp_fits"
-        with NamedTemporaryFile(suffix=".fits", delete=False) as tmp:
-            tmp.write(response.content)
-            tmp_path = tmp.name
-
-        try:
-            stage = "run_pipeline"
-            results = run_pipeline(tmp_path, cfg)
-
-            stage = "build_response"
-            if results.get("status") == "partial_success":
-                results["request_id"] = request_id
-                results["image_url"] = image_url
-                return results, 200, {"Content-Type": "application/json"}
-
-            if return_plot:
-                if plot_type not in results.get("plots", {}):
-                    raise BadRequest(f"Unknown plot_type: {plot_type}")
-
-                image_bytes = base64.b64decode(results["plots"][plot_type])
-                return Response(image_bytes, mimetype="image/png")
+        if not return_plot:
+            stage = "cache_or_run_pipeline"
+            results = get_or_compute(
+                "astrometry",
+                body,
+                lambda: _run_astrometry_uncached(image_url, cfg),
+            )
 
             results["request_id"] = request_id
+            results["image_url"] = image_url
             return results, 200, {"Content-Type": "application/json"}
-        finally:
-            os.remove(tmp_path)
+
+        stage = "run_pipeline"
+        results = _run_astrometry_uncached(image_url, cfg)
+
+        stage = "build_response"
+        if results.get("status") == "partial_success":
+            results["request_id"] = request_id
+            results["image_url"] = image_url
+            return results, 200, {"Content-Type": "application/json"}
+
+        if return_plot:
+            if plot_type not in results.get("plots", {}):
+                raise BadRequest(f"Unknown plot_type: {plot_type}")
+
+            image_bytes = base64.b64decode(results["plots"][plot_type])
+            return Response(image_bytes, mimetype="image/png")
+
+        results["request_id"] = request_id
+        return results, 200, {"Content-Type": "application/json"}
     except AstrometryValidationError as exc:
         payload = {
             "status": "bad_request",

@@ -1,6 +1,7 @@
 import os
 from ...photometry import get_image,subpixel_centroid,define_aperture,do_aperture_photometry
 from .generated_images import upload_figure_png
+from .result_cache import get_or_compute
 from astropy.wcs import WCS
 import matplotlib
 matplotlib.use('Agg') 
@@ -15,6 +16,14 @@ def get_world_coordinates(WCS_file,x,y):
     """
     Accepts an astropy-readable WCS object (a .wcs or fits file ) and outputs the world coordinates of a 0-indexed (x,y) pixel point in decimal degrees.
     """
+    return get_or_compute(
+        "get-world-coordinates",
+        {"WCS_file": WCS_file, "x": x, "y": y},
+        lambda: _get_world_coordinates_uncached(WCS_file, x, y),
+    )
+
+
+def _get_world_coordinates_uncached(WCS_file,x,y):
     try:
         world_coords = WCS(fits.open(WCS_file)[0].header)
     except Exception as e:
@@ -40,6 +49,14 @@ def get_pixel_coordinates(WCS_file,ra,dec):
     """
     Accepts an astropy-readable WCS object (a .wcs or fits file) and outputs the 0-indexed (x,y) pixel coordinates of an (ra,dec) point in decimal degrees.
     """
+    return get_or_compute(
+        "get-pixel-coordinates",
+        {"WCS_file": WCS_file, "ra": ra, "dec": dec},
+        lambda: _get_pixel_coordinates_uncached(WCS_file, ra, dec),
+    )
+
+
+def _get_pixel_coordinates_uncached(WCS_file,ra,dec):
     try:
         world_coords = WCS(fits.open(WCS_file)[0].header)
     except Exception as e:
@@ -95,6 +112,19 @@ def centroid(file,target_x,target_y,search_radius):
                     Output plot showing the default aperture + annulus extraction onto the cutout image.
     """
 
+    return get_or_compute(
+        "centroid",
+        {
+            "file": file,
+            "target_x": target_x,
+            "target_y": target_y,
+            "search_radius": search_radius,
+        },
+        lambda: _centroid_uncached(file, target_x, target_y, search_radius),
+    )
+
+
+def _centroid_uncached(file,target_x,target_y,search_radius):
     img, header = get_image(file)
 
     cent_pix = subpixel_centroid([target_x,target_y],img,search_radius)
@@ -146,6 +176,14 @@ def target_extraction(body):
     body : dict
         Request body containing file, target_aperture_params, and background_aperture_params.
     """
+    return get_or_compute(
+        "target-photometry",
+        body,
+        lambda: _target_extraction_uncached(body),
+    )
+
+
+def _target_extraction_uncached(body):
     file = body['file']
     target_aperture_params = body['target_aperture_params']
     background_aperture_params = body['background_aperture_params']

@@ -131,3 +131,21 @@ variable "CAT_IMAGES_PREFIX" {
   type        = string
   default     = "generated-images/"
 }
+
+variable "CAT_CACHE_BUCKET_NAME" {
+  description = "Private S3 bucket name for CAT route JSON result cache. Leave null to derive from PROJECT_PREFIX."
+  type        = string
+  default     = null
+}
+
+variable "CAT_CACHE_PREFIX" {
+  description = "S3 key prefix used for CAT route JSON result cache"
+  type        = string
+  default     = "cache/"
+}
+
+variable "CAT_CACHE_RETENTION_DAYS" {
+  description = "Number of days to retain CAT route JSON cache objects"
+  type        = number
+  default     = 30
+}

@@ -3,6 +3,7 @@ import requests
 from astropy.io import fits
 from ...background import global_subtraction
 from ...photometry import get_image
+from .result_cache import get_or_compute
 
 def download_file(url):
     """
@@ -46,6 +47,14 @@ def perform_median_subtraction(url):
         Filename of background subtracted image saved locally
     """
 
+    return get_or_compute(
+        "subtract-median-background",
+        {"url": url},
+        lambda: _perform_median_subtraction_uncached(url),
+    )
+
+
+def _perform_median_subtraction_uncached(url):
     # Download file and get file base name
     file_base = download_file(url)
     # Get image data
@@ -60,4 +69,6 @@ def perform_median_subtraction(url):
     
     fits.writeto(subtract_fname, data_sub, header, overwrite=True)
 
-    return subtract_fname
+    return {
+        "background_subtracted_image_path": subtract_fname,
+    }
