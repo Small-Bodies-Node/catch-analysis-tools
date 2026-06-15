@@ -1,17 +1,20 @@
+import argparse
 import os
 import subprocess
-import argparse
+
+import fitsio
 import numpy as np
 import pandas as pd
 import sep
-import fitsio
-from astropy.io import fits
-from astropy.wcs import WCS
-from astropy.table import Table
 from astropy.coordinates import SkyCoord
+from astropy.io import fits
+from astropy.table import Table
+from astropy.wcs import WCS
 
 
-def run_solve_field(input_fits, output_wcs, pixel_scale, Ra_deg, Dec_deg, scale_units="arcsecperpix"):
+def run_solve_field(
+    input_fits, output_wcs, pixel_scale, Ra_deg, Dec_deg, scale_units="arcsecperpix"
+):
     """
     Execute the `solve-field` command to compute a WCS solution.
 
@@ -33,27 +36,35 @@ def run_solve_field(input_fits, output_wcs, pixel_scale, Ra_deg, Dec_deg, scale_
     """
     if os.path.exists(output_wcs):
         print(
-            f"Output file '{output_wcs}' already exists. Skipping solve-field execution.")
+            f"Output file '{output_wcs}' already exists. Skipping solve-field execution."
+        )
         return True
 
     config_file = os.environ.get("ASTROMETRY_CONFIG")
     if config_file is None:
         raise RuntimeError(
-            "ASTROMETRY_CONFIG is not set. "
-            "This is required to run solve-field."
+            "ASTROMETRY_CONFIG is not set. This is required to run solve-field."
         )
 
     command = [
         "solve-field",
         "--overwrite",
-        "--config", config_file,
-        "--ra", str(Ra_deg),
-        "--dec", str(Dec_deg),
-        "--scale-units", scale_units,
-        "--scale-low", str(pixel_scale * 0.5),
-        "--scale-high", str(pixel_scale * 2.0),
-        "--radius", "2",
-        "--downsample", "1",
+        "--config",
+        config_file,
+        "--ra",
+        str(Ra_deg),
+        "--dec",
+        str(Dec_deg),
+        "--scale-units",
+        scale_units,
+        "--scale-low",
+        str(pixel_scale * 0.5),
+        "--scale-high",
+        str(pixel_scale * 2.0),
+        "--radius",
+        "2",
+        "--downsample",
+        "1",
         input_fits,
     ]
 
@@ -87,23 +98,14 @@ def find_sources(image_sub, bkg_err, snr, aperture_radius=7.0):
         Background-subtracted image array.
     """
     sep.set_sub_object_limit(500)
-    sources = sep.extract(
-        image_sub,
-        thresh=snr,
-        err=bkg_err,
-        deblend_nthresh=16
-    )
+    sources = sep.extract(image_sub, thresh=snr, err=bkg_err, deblend_nthresh=16)
     source_list = pd.DataFrame(sources)
     flux, flux_err, _ = sep.sum_circle(
-        image_sub,
-        source_list['x'], source_list['y'],
-        aperture_radius,
-        err=bkg_err
+        image_sub, source_list["x"], source_list["y"], aperture_radius, err=bkg_err
     )
-    source_list['aperture_sum'] = flux
-    source_list['aperture_err'] = flux_err
-    source_list = source_list[source_list['aperture_sum'] > 0].reset_index(
-        drop=True)
+    source_list["aperture_sum"] = flux
+    source_list["aperture_err"] = flux_err
+    source_list = source_list[source_list["aperture_sum"] > 0].reset_index(drop=True)
     return source_list, image_sub
 
 
@@ -146,10 +148,10 @@ def retrieve_sources(source_list, wcs_solution):
     sky_coords : astropy.coordinates.SkyCoord
         SkyCoord object with celestial coordinates of sources.
     """
-    world = wcs_solution.pixel_to_world(source_list['x'], source_list['y'])
-    source_list['RA'] = [c.ra.deg for c in world]
-    source_list['Dec'] = [c.dec.deg for c in world]
-    sky_coords = SkyCoord(source_list['RA'], source_list['Dec'], unit='deg')
+    world = wcs_solution.pixel_to_world(source_list["x"], source_list["y"])
+    source_list["RA"] = [c.ra.deg for c in world]
+    source_list["Dec"] = [c.dec.deg for c in world]
+    sky_coords = SkyCoord(source_list["RA"], source_list["Dec"], unit="deg")
     return source_list, sky_coords
 
 
@@ -166,12 +168,23 @@ def cleanup_files(file_base):
     -------
     None
     """
-    extensions = ['.axy', '.corr', '.match', '.new', '.rdls', '.solved',
-                  '-ngc.png', '-objs.png', '-indx.png', '-indx.xyls']
+    extensions = [
+        ".axy",
+        ".corr",
+        ".match",
+        ".new",
+        ".rdls",
+        ".solved",
+        "-ngc.png",
+        "-objs.png",
+        "-indx.png",
+        "-indx.xyls",
+    ]
     for ext in extensions:
         fname = f"{file_base}{ext}"
         if os.path.exists(fname):
             os.remove(fname)
+
 
 def write_astrometry_output(
     image,

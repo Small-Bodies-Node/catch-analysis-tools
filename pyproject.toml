@@ -44,7 +44,7 @@ packages = ["catch_analysis_tools"]
 write_to = "catch_analysis_tools/version.py"
 
 [tool.ruff]
-select = [
+lint.select = [
     "E", # pycodestyle errors
     "W", # pycodestyle warnings
     "F", # pyflakes. "E" + "W" + "F" + "C90" (mccabe complexity) is equivalent to flake8
