@@ -3,11 +3,24 @@ import pytest
 from photutils.datasets import make_wcs
 from pytest import approx
 
-from ..app.services.photometry import *
-from ..background import *
+from ..app.services.photometry import (
+    get_image,
+    get_pixel_coordinates,
+    get_world_coordinates,
+)
+from ..background import get_background
 
-# here are test functions for grabbing the data, doing background subtractions and manipulating source extractions
-from ..photometry import *
+# here are test functions for grabbing the data, doing background subtractions
+# and manipulating source extractions
+from ..photometry import (
+    calibrated_mag,
+    create_user_aperture,
+    define_aperture,
+    do_aperture_photometry,
+    id_good_sources,
+    source_instr_mag,
+    subpixel_centroid,
+)
 
 
 @pytest.mark.remote_data

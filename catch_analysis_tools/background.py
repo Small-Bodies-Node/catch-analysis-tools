@@ -10,8 +10,9 @@ from photutils.utils import circular_footprint
 
 
 def get_background(data):
-    """computes and returns a global background subtraction, masking sources using image segmentation IDs.
-       Does NOT return background subtracted data
+    """
+    Computes and returns a global background subtraction, masking sources using
+    image segmentation IDs. Does NOT return background subtracted data
 
 
     Parameters
@@ -20,16 +21,15 @@ def get_background(data):
         2D image array to compute background on
 
 
-
     Returns
     -------
     bkg :
         background object returned from photutils Background2D
 
-
     """
 
-    # performs a global background subtraction, masking sources using image segmentation IDs
+    # performs a global background subtraction, masking sources using image
+    # segmentation IDs
     sigma_clip = SigmaClip(sigma=3.0, maxiters=10)
 
     threshold = detect_threshold(data, nsigma=2.0, sigma_clip=sigma_clip)
@@ -52,7 +52,9 @@ def get_background(data):
 
 
 def global_subtraction(data):
-    """performs a global background subtraction, masking sources using image segmentation IDs
+    """
+    Performs a global background subtraction, masking sources using image
+    segmentation IDs.
 
 
     Parameters
@@ -61,14 +63,13 @@ def global_subtraction(data):
         2D image array to be background subtracted
 
 
-
     Returns
     -------
     data_sub : array_like
         Background subtracted data array
+
     bkg :
         background object returned from get_background(data)
-
 
     """
 
@@ -79,33 +80,36 @@ def global_subtraction(data):
 
 
 def calc_bkg(data, background_aperture, method, sigma_clip):
-    """Takes in an image array and aperture for background estimate. Determines background
-        estimator per specified method (mean or median) and variance of pixels, with optional
-        sigma clipping.
+    """
+    Takes in an image array and aperture for background estimate. Determines
+    background estimator per specified method (mean or median) and variance of
+    pixels, with optional sigma clipping.
 
 
     Parameters
     ----------
     data : array_like
-           image data to be used for photometry
+        image data to be used for photometry
 
     position : array_like
-             [x,y] pixel location to define center CircularAnnulus object
+        [x,y] pixel location to define center CircularAnnulus object
 
     inner_r : float
-              Distance (in pixels) from annulus center to the inner edge
+        Distance (in pixels) from annulus center to the inner edge
 
     outer_r : float
-              Distance (in pixels) from annulus center to the outer edge
+        Distance (in pixels) from annulus center to the outer edge
+
 
     Returns
     -------
     bkg_estimator : float
-                    estimate of true background level in background aperture, per "method"
+        Estimate of true background level in background aperture, per "method"
 
     bkg_var : float
-              Variance of pixels within the background aperture. If sigma clipped, square of
-              clipped stddev. Otherwise, as square of range of values from 50-16th percentiles
+        Variance of pixels within the background aperture. If sigma clipped,
+        square of clipped stddev. Otherwise, as square of range of values from
+        50-16th percentiles.
 
     """
 
@@ -114,7 +118,8 @@ def calc_bkg(data, background_aperture, method, sigma_clip):
     background_data = background_mask.multiply(data)
     background_data_1d = background_data[background_mask.data > 0]
 
-    # Todo: Add flexibility for the stats for computing background. Include rectangular aperture.
+    # Todo: Add flexibility for the stats for computing background. Include
+    # rectangular aperture.
     if sigma_clip is not None:
         bkg_mean, bkg_median, bkg_stddev = sigma_clipped_stats(
             background_data_1d, sigma=sigma_clip, maxiters=10

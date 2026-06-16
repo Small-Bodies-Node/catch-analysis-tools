@@ -20,25 +20,32 @@ def run_solve_field(
     """
     Execute the `solve-field` command to compute a WCS solution.
 
+
     Parameters
     ----------
     input_fits : str
         Path to the input FITS image.
+
     output_wcs : str
         Path for the output WCS solution file.
+
     pixel_scale : float
         Approximate pixel scale (e.g., arcsec/pixel).
+
     scale_units : str, optional
         Units for pixel scale (default is "arcsecperpix").
+
 
     Returns
     -------
     success : bool
         True if the solve-field command succeeded or file already exists.
+
     """
     if os.path.exists(output_wcs):
         print(
-            f"Output file '{output_wcs}' already exists. Skipping solve-field execution."
+            f"Output file '{output_wcs}' already exists. "
+            "Skipping solve-field execution."
         )
         return True
 
@@ -81,24 +88,32 @@ def find_sources(image_sub, bkg_err, snr, aperture_radius=7.0):
     """
     Detect sources in an image using SEP background subtraction and extraction.
 
+
     Parameters
     ----------
     image_sub : array_like
         2D numpy array after background subtraction (cleaned image).
+
     bkg_err : float or array_like
         Background noise estimate (global RMS or per‐pixel error map).
+
     snr : float
         Minimum signal-to-noise ratio threshold for source extraction.
+
     aperture_radius : float, optional
         Radius of the circular aperture in pixels for flux summation (default is 7.0).
+
 
     Returns
     -------
     source_list : pd.DataFrame
         Table of detected sources with aperture photometry columns.
+
     image_sub : np.ndarray
         Background-subtracted image array.
+
     """
+
     sep.set_sub_object_limit(500)
     sources = sep.extract(image_sub, thresh=snr, err=bkg_err, deblend_nthresh=16)
     source_list = pd.DataFrame(sources)
@@ -115,16 +130,20 @@ def load_wcs(output_wcs):
     """
     Load a WCS solution from a FITS file header.
 
+
     Parameters
     ----------
     output_wcs : str
         Path to the FITS file containing the WCS header from astrometry.net().
 
+
     Returns
     -------
     wcs_solution : astropy.wcs.WCS
         World coordinate system solution object.
+
     """
+
     if not os.path.exists(output_wcs):
         raise FileNotFoundError(f"WCS file not found: {output_wcs}")
     with fits.open(output_wcs) as hdul:
@@ -136,20 +155,26 @@ def retrieve_sources(source_list, wcs_solution):
     """
     Convert pixel coordinates to sky coordinates using a WCS.
 
+
     Parameters
     ----------
     source_list : pd.DataFrame
         Table with 'x' and 'y' pixel positions of detected sources.
+
     wcs_solution : astropy.wcs.WCS
         World coordinate system solution object.
+
 
     Returns
     -------
     source_list : pd.DataFrame
         Updated table including 'RA' and 'Dec' columns in degrees.
+
     sky_coords : astropy.coordinates.SkyCoord
         SkyCoord object with celestial coordinates of sources.
+
     """
+
     world = wcs_solution.pixel_to_world(source_list["x"], source_list["y"])
     source_list["RA"] = [c.ra.deg for c in world]
     source_list["Dec"] = [c.dec.deg for c in world]
@@ -167,18 +192,27 @@ def calibrate_photometry(
     """
     Calibrate instrumental magnitudes against a Pan-STARRS1 catalog.
 
+
     Parameters
     ----------
     sky_coords : astropy.coordinates.SkyCoord
         Celestial coordinates of detected sources.
+
     source_list : pd.DataFrame
         Table of detected sources containing 'aperture_sum'.
+
     catalog : str, optional
-        Name of the photometric catalog class in calviacat (default 'PanSTARRS1').
+        Name of the photometric catalog class in calviacat (default
+        'PanSTARRS1').
+
     obs_band : str, optional
-        Filter of the observed image (used for labeling and color index only; default: 'obs_band').
+        Filter of the observed image (used for labeling and color index only;
+        default: 'obs_band').
+
     cal_band : str, optional
-        Reference catalog filter for color term (e.g. 'g', 'r', 'i'; default 'g').
+        Reference catalog filter for color term (e.g. 'g', 'r', 'i'; default
+        'g').
+
 
     Returns
     -------
@@ -195,7 +229,9 @@ def calibrate_photometry(
         - color_index  : str, the color string used (e.g. 'r-g')
         - objids       : array_like, matched catalog object IDs
         - distances    : array_like, matching distances
+
     """
+
     color_index = f"{obs_band}-{cal_band}"
 
     try:
@@ -234,25 +270,33 @@ def plot_color_correction(color_mags, m, m_inst, C, zp, color_index: str):
     """
     Plot the relation between instrumental and calibrated magnitudes.
 
+
     Parameters
     ----------
     color_mags : array_like
         Color indices (obs_band - cal_band) of matched stars.
+
     m : array_like
         Calibrated magnitudes from reference catalog.
+
     m_inst : array_like
         Instrumental magnitudes measured.
+
     C : float
         Color term coefficient.
+
     zp : float
         Zero-point magnitude.
+
     color_index : str
         Label for the color axis (e.g. 'r-g').
+
 
     Returns
     -------
     fig, ax : tuple
         Matplotlib figure and axis objects for the plot.
+
     """
     fig, ax = plt.subplots()
     ax.scatter(color_mags, m - m_inst, marker=".")
@@ -268,21 +312,28 @@ def plot_image(telescope_image_sub, source_list, matched_idx, colored_idx):
     """
     Overlay detected and matched sources on the background-subtracted image.
 
+
     Parameters
     ----------
+
     telescope_image_sub : np.ndarray
         Background-subtracted image array.
+
     source_list : pd.DataFrame
         Table of detected sources with 'x' and 'y' pixel positions.
+
     matched_idx : array_like
         Indices of matched catalog sources in source_list.
+
     colored_idx : array_like
         Indices of sources selected for color correction.
+
 
     Returns
     -------
     fig, ax : tuple
         Matplotlib figure and axis objects for the plot.
+
     """
     fig, ax = plt.subplots()
     m, s = np.mean(telescope_image_sub), np.std(telescope_image_sub)
@@ -338,28 +389,38 @@ def create_header(
     """
     Create and write a FITS file with calibrated header and source tables.
 
+
     Parameters
     ----------
     image : array_like
         Original 2D image data array.
+
     wcs_solution : astropy.wcs.WCS
         WCS solution for the image.
+
     zp : float
         Zero-point magnitude.
+
     unc : float
         Uncertainty of the zero-point.
+
     source_list : pd.DataFrame
         Table of detected sources.
+
     matched_idx : array_like
         Indices for matched catalog sources.
+
     colored_idx : array_like
         Indices for color-correction sources.
+
     input_fits : str, optional
         Filename for the input FITS file.
+
 
     Returns
     -------
     None
+
     """
     image_arr = np.asarray(image)
     primary_hdu = fits.PrimaryHDU(data=image_arr, header=wcs_solution.to_header())
@@ -399,14 +460,17 @@ def cleanup_files(file_base):
     """
     Remove temporary files generated during the processing pipeline.
 
+
     Parameters
     ----------
     file_base : str
         Base filename (without extension) for the files to remove.
 
+
     Returns
     -------
     None
+
     """
     extensions = [
         ".axy",

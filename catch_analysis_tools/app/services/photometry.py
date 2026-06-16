@@ -19,7 +19,8 @@ from matplotlib import pyplot as plt
 
 def get_world_coordinates(WCS_file, x, y):
     """
-    Accepts an astropy-readable WCS object (a .wcs or fits file ) and outputs the world coordinates of a 0-indexed (x,y) pixel point in decimal degrees.
+    Accepts an astropy-readable WCS object (a .wcs or fits file ) and outputs
+    the world coordinates of a 0-indexed (x,y) pixel point in decimal degrees.
     """
     try:
         world_coords = WCS(fits.open(WCS_file)[0].header)
@@ -31,7 +32,8 @@ def get_world_coordinates(WCS_file, x, y):
                 world_coords = WCS_file
             except Exception:
                 raise ValueError(
-                    "Could not read WCS file. Please ensure that the file is either a .wcs file or a .fits file with a valid WCS solution in the header."
+                    "Could not read WCS file. Please ensure that the file is either a "
+                    ".wcs file or a .fits file with a valid WCS solution in the header."
                 )
 
     loc = world_coords.pixel_to_world(x, y)
@@ -42,7 +44,8 @@ def get_world_coordinates(WCS_file, x, y):
 
 def get_pixel_coordinates(WCS_file, ra, dec):
     """
-    Accepts an astropy-readable WCS object (a .wcs or fits file) and outputs the 0-indexed (x,y) pixel coordinates of an (ra,dec) point in decimal degrees.
+    Accepts an astropy-readable WCS object (a .wcs or fits file) and outputs the
+    0-indexed (x,y) pixel coordinates of an (ra,dec) point in decimal degrees.
     """
     try:
         world_coords = WCS(fits.open(WCS_file)[0].header)
@@ -54,7 +57,8 @@ def get_pixel_coordinates(WCS_file, ra, dec):
                 world_coords = WCS_file
             except Exception:
                 raise ValueError(
-                    "Could not read WCS file. Please ensure that the file is either a .wcs file or a .fits file with a valid WCS solution in the header."
+                    "Could not read WCS file. Please ensure that the file is either a "
+                    ".wcs file or a .fits file with a valid WCS solution in the header."
                 )
 
     sky_loc = SkyCoord(ICRS(ra=ra * u.deg, dec=dec * u.deg))
@@ -68,19 +72,23 @@ def get_pixel_coordinates(WCS_file, ra, dec):
 
 def centroid(file, target_x, target_y, search_radius):
     """
-    Searches for source nearby to expected ephemeris location in image, assumes that astrometry solution has been rerun and that both the cutout .fits file and the redone .wcs file exist.
+    Searches for source nearby to expected ephemeris location in image, assumes
+    that astrometry solution has been rerun and that both the cutout .fits file
+    and the redone .wcs file exist.
 
 
     Parameters
     ----------
     file : string
-        Base filename (without .fits or .wcs extension) taken from CATCH-generated query URL.
+        Base filename (without .fits or .wcs extension) taken from
+        CATCH-generated query URL.
 
     target_x : float
         Target x pixel location, to be used as initial guess for the object.
 
     target_y : float
-        Target y pixel ephemeris location, to be used as initial guess for the object.
+        Target y pixel ephemeris location, to be used as initial guess for the
+        object.
 
     search_radius : float
         Radius in pixels of search area (centered on (x,y) ) for centroiding
@@ -88,13 +96,12 @@ def centroid(file, target_x, target_y, search_radius):
 
     Returns
     -------
-    search_results :
-        array_like
+    search_results : array_like
 
+    figname : string
+        Output plot showing the default aperture + annulus extraction onto the
+        cutout image.
 
-    figname:
-        string
-                    Output plot showing the default aperture + annulus extraction onto the cutout image.
     """
 
     img, header = get_image(file)
@@ -137,19 +144,24 @@ def centroid(file, target_x, target_y, search_radius):
     return centroid_results
 
 
-# todo: create function that takes target location, background location and outputs aperture objects
-# this function can be fed the outputs of centroid_location
+# todo: create function that takes target location, background location and
+# outputs aperture objects this function can be fed the outputs of
+# centroid_location
 
 
 def target_extraction(body):
     """
-    Searches for source nearby to expected ephemeris location in image, assumes that astrometry solution has been rerun and that both the cutout .fits file and the redone .wcs file exist.
+    Searches for source nearby to expected ephemeris location in image, assumes
+    that astrometry solution has been rerun and that both the cutout .fits file
+    and the redone .wcs file exist.
 
 
     Parameters
     ----------
     body : dict
-        Request body containing file, target_aperture_params, and background_aperture_params.
+        Request body containing file, target_aperture_params, and
+        background_aperture_params.
+
     """
     file = body["file"]
     target_aperture_params = body["target_aperture_params"]
@@ -166,8 +178,8 @@ def target_extraction(body):
         img, target_aperture, background_aperture
     )
 
-    # could put code to filter out frames where targ_loc and targ_cent vary by more than a couple pixels here
-    # (would mean star hit)
+    # could put code to filter out frames where targ_loc and targ_cent vary by
+    # more than a couple pixels here (would mean star hit)
 
     plt.figure(figsize=(8, 8))
     plt.imshow(img, norm=norm, cmap="gray_r")

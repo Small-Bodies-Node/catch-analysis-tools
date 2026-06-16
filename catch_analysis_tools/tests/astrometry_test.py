@@ -1,11 +1,29 @@
+import os
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 import pytest
+from astropy.coordinates import SkyCoord
+from astropy.io import fits
+from astropy.wcs import WCS
 
-from ..astrometry import *
+from ..astrometry import (
+    calibrate_photometry,
+    cleanup_files,
+    create_header,
+    find_sources,
+    load_wcs,
+    plot_color_correction,
+    plot_image,
+    retrieve_sources,
+    run_solve_field,
+)
 
 RA_DEG = 263.0
 DEC_DEG = 34.5

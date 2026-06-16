@@ -44,6 +44,7 @@ packages = ["catch_analysis_tools"]
 write_to = "catch_analysis_tools/version.py"
 
 [tool.ruff]
+line-length = 88
 lint.select = [
     "E", # pycodestyle errors
     "W", # pycodestyle warnings

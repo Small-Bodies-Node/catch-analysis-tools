@@ -1,7 +1,11 @@
 import numpy as np
 from pytest import approx
 
-from ..background import *
+from ..background import (
+    calc_bkg,
+    get_background,
+    global_subtraction,
+)
 from ..photometry import define_aperture
 
 
@@ -10,7 +14,6 @@ def test_global_subtraction():
     data[40:50, 40:50] = 5 * data[40:50, 40:50]
     data_sub, bkg = global_subtraction(data)
 
-    errors = []
     # test some basic values checked manually against above image values
     assert np.mean(data_sub) == 0.04
     assert np.mean(bkg.background) == 1.0

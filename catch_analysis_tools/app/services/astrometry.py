@@ -136,23 +136,30 @@ def find_sources(image, det_cfg):
     """
     Detect sources in an image using SEP background subtraction and extraction.
 
+
     Parameters
     ----------
     image_sub : array_like
         2D numpy array after background subtraction (cleaned image).
+
     bkg_err : float or array_like
         Background noise estimate (global RMS or per‐pixel error map).
+
     snr : float
         Minimum signal-to-noise ratio threshold for source extraction.
+
     aperture_radius : float, optional
         Radius of the circular aperture in pixels for flux summation (default is 7.0).
+
 
     Returns
     -------
     source_list : pd.DataFrame
         Table of detected sources with aperture photometry columns.
+
     image_sub : np.ndarray
         Background-subtracted image array.
+
     """
     bkg = sep.Background(image)
     image_sub = image - bkg.back()
@@ -185,15 +192,18 @@ def load_wcs(output_wcs):
     """
     Load a WCS solution from a FITS file header.
 
+
     Parameters
     ----------
     output_wcs : str
         Path to the FITS file containing the WCS header from astrometry.net().
 
+
     Returns
     -------
     wcs_solution : astropy.wcs.WCS
         World coordinate system solution object.
+
     """
     if not os.path.exists(output_wcs):
         raise FileNotFoundError(f"WCS file not found: {output_wcs}")
@@ -231,18 +241,25 @@ def calibrate_photometry(sky_coords, source_list, phot_cfg):
     """
     Calibrate instrumental magnitudes against a Pan-STARRS1 catalog.
 
+
     Parameters
     ----------
     sky_coords : astropy.coordinates.SkyCoord
         Celestial coordinates of detected sources.
+
     source_list : pd.DataFrame
         Table of detected sources containing 'aperture_sum'.
+
     catalog : str, optional
         Name of the photometric catalog class in calviacat (default 'PanSTARRS1').
+
     obs_band : str, optional
-        Filter of the observed image (used for labeling and color index only; default: 'obs_band').
+        Filter of the observed image (used for labeling and color index only;
+        default: 'obs_band').
+
     cal_band : str, optional
         Reference catalog filter for color term (e.g. 'g', 'r', 'i'; default 'g').
+
 
     Returns
     -------
@@ -259,6 +276,7 @@ def calibrate_photometry(sky_coords, source_list, phot_cfg):
         - color_index  : str, the color string used (e.g. 'r-g')
         - objids       : array_like, matched catalog object IDs
         - distances    : array_like, matching distances
+
     """
     catalog = phot_cfg["catalog"]
     obs_band = phot_cfg["obs_band"]
@@ -511,7 +529,6 @@ def run_pipeline(input_fits: str, user_config: dict) -> dict:
     run_solve_field(input_fits, output_wcs, wcs_cfg)
 
     wcs_solution = load_wcs(output_wcs)
-    header = wcs_solution.to_header()
 
     ny, nx = image.shape
     center_world = wcs_solution.pixel_to_world(nx / 2.0, ny / 2.0)
