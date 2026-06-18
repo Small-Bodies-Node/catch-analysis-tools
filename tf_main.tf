@@ -407,6 +407,21 @@ resource "aws_iam_role_policy" "ecs_task_cat_cache" {
           "s3:PutObject"
         ]
         Resource = "${aws_s3_bucket.cat_cache.arn}/${var.CAT_CACHE_PREFIX}*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket"
+        ]
+        Resource = aws_s3_bucket.cat_cache.arn
+        Condition = {
+          StringLike = {
+            "s3:prefix" = [
+              var.CAT_CACHE_PREFIX,
+              "${var.CAT_CACHE_PREFIX}*"
+            ]
+          }
+        }
       }
     ]
   })
