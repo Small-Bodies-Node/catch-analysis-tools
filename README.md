@@ -103,7 +103,7 @@ Otherwise, when the API service is started, all index files will be downloaded, 
 
 Note: These files are required and may take time to download (~GB total).
 
-### 3. Create astrometry configuration file
+### 4. Create astrometry configuration file
 
 ```bash
 mkdir -p `dirname $ASTROMETRY_CONFIG`
