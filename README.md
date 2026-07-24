@@ -2,13 +2,26 @@
 
 Data analysis tools for CATCH, an astronomical survey search tool
 
-## Testing
+## Development and testing
 
-Get required packages useful for testing:
+Get required packages useful for development and testing:
 
 ```
-pip install .[tests]
+pip install .[dev,tests]
 ```
+
+### Code formatting and linting rules
+
+There is a pre-commit hook to enforce code format, linting, and check for a few other things (see `.pre-commmit-config.yaml`).  It will automatically run when you `git commit` your code.  Alternatively, the format and linting checks may be run separately on any changed files:
+
+```
+ruff format
+```
+
+```
+ruff check
+```
+
 
 ### Running the webapp (without Docker)
 
