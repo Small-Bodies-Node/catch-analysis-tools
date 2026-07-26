@@ -10,6 +10,10 @@ from flask import Response
 from werkzeug.exceptions import BadRequest
 
 from ...exceptions import AstrometricCalibrationError, InputValidationError
+from ...services.astrometry_readiness.get_astrometry_readiness_status import (
+    get_astrometry_readiness_status,
+)
+from ...services.astrometry_readiness.is_astrometry_ready import is_astrometry_ready
 from ...services.calibration.astrometry import run_pipeline
 from ...services.result_cache import get_or_compute
 
@@ -57,18 +61,18 @@ def handler(body):
     """Handle POST /calibration/astrometry and translate service results to HTTP
     responses."""
 
-    # if not is_astrometry_ready():
-    #     payload = {
-    #         "status": "not_ready",
-    #         "message": "Astrometry index files are not ready yet.",
-    #         "astrometry_data": get_astrometry_readiness_status(),
-    #     }
-    #     return Response(
-    #         json.dumps(payload),
-    #         status=503,
-    #         mimetype="application/json",
-    #         headers={"Retry-After": "30"},
-    #     )
+    if not is_astrometry_ready():
+        payload = {
+            "status": "not_ready",
+            "message": "Astrometry index files are not ready yet.",
+            "astrometry_data": get_astrometry_readiness_status(),
+        }
+        return Response(
+            json.dumps(payload),
+            status=503,
+            mimetype="application/json",
+            headers={"Retry-After": "30"},
+        )
 
     request_id = uuid4().hex[:12]
     image_url = body.get("image_url")
