@@ -33,7 +33,7 @@ def write_photometric_calibration_output(
     primary_hdu.header["CAL_BAND"] = cal_band, "calibration band"
     primary_hdu.header["COLRINDX"] = str(color_index), "color index"
     primary_hdu.header["ZP"] = zero_point, "magnitude zero point"
-    primary_hdu.header["COLORTRM"] = color_term, "zerp point color term"
+    primary_hdu.header["COLRTERM"] = color_term, "zerp point color term"
     primary_hdu.header["ZP_UNC"] = zero_point_uncertainty, "stdev of residuals"
 
     # replace masked values with NaN
