@@ -18,7 +18,6 @@ dependencies = [
     "scikit-image",
     "pandas>=3.0",
     "sep",
-    "fitsio",
     "calviacat",
     "mastcasjobs",
     "beautifulsoup4",
@@ -33,6 +32,10 @@ test = ["pytest", "pytest-remotedata", "pytest-cov", "tox"]
 
 [project.urls]
 homepage = "https://catch.astro.umd.edu/"
+
+[project.scripts]
+cat-calibrate-astrometry = "catch_analysis_tools.cli.calibration.astrometry:main"
+cat-calibrate-photometry = "catch_analysis_tools.cli.calibration.photometry:main"
 
 [build-system]
 requires = ["setuptools>=80", "setuptools-scm>=8", "wheel"]

@@ -10,7 +10,9 @@ info:
 paths:
   /hello:
     get:
-      operationId: catch_analysis_tools.app.handlers.hello.hello
+      tags:
+        - Service status
+      operationId: catch_analysis_tools.handlers.hello.hello
       summary: Basic service liveness endpoint.
       responses:
         "200":
@@ -25,7 +27,9 @@ paths:
                   docker_image_tag=2026-02-11-001
   /health:
     get:
-      operationId: catch_analysis_tools.app.handlers.health.health
+      tags:
+        - Service status
+      operationId: catch_analysis_tools.handlers.health.health
       summary: Service health and astrometry data readiness.
       responses:
         "200":
@@ -35,8 +39,10 @@ paths:
               schema:
                 type: object
   /reset:
-    post:
-      operationId: catch_analysis_tools.app.handlers.reset.reset
+    get:
+      tags:
+        - Service status
+      operationId: catch_analysis_tools.handlers.reset.reset
       summary: Force an astrometry data readiness recheck.
       responses:
         "202":
@@ -49,9 +55,9 @@ paths:
   /calibration/astrometry:
     post:
       tags:
-        - Astrometry
+        - Calibration
       summary: Perform geometric plate solving and update FITS headers with WCS data.
-      operationId: catch_analysis_tools.app.services.calibration.astrometry.run_astrometry_pipeline
+      operationId: catch_analysis_tools.handlers.calibration.astrometry.handler
       requestBody:
         required: true
         content:
@@ -65,31 +71,37 @@ paths:
                   type: string
                   example: "https://uxzqjwo0ye.execute-api.us-west-1.amazonaws.com/api/images/urn:nasa:pds:gbo.ast.loneos.survey:data_augmented:060104_1a_099_fits?ra=51.11064&dec=17.38378&size=12.60arcmin&format=fits"
                 ra:
+                  description: Image right ascension guess (degrees).
                   type: number
-                  default: 51.11064
+                  nullable: true
+                  example: 51.11064
                 dec:
+                  description: Image declination guess (degrees).
                   type: number
-                  default: 17.38378
+                  nullable: true
+                  example: 17.38378
                 use_ra_dec:
+                  description: Set to true to use (ra, dec) as a guess.
                   type: boolean
                   default: false
                 pixel_scale:
+                  description: Image pixel scale guess (arcsec/pix).
                   type: number
                   default: 2.5
                 scale_low:
+                  description: Lower limit on image pixel scale (arcsec/pix)
                   type: number
                   nullable: true
                   default: null
                 scale_high:
+                  description: Upper limit on image pixel scale (arcsec/pix)
                   type: number
                   nullable: true
                   default: null
                 search_radius:
+                  description: Search radius around (ra, dec) (degrees).
                   type: number
                   default: 2.0
-                snr_threshold:
-                  type: number
-                  default: 3.0
       responses:
         "200":
           description: WCS geometric calculation successful. Returns updated FITS location.
@@ -101,8 +113,6 @@ paths:
                   wcs_image_url:
                     type: string
                     description: Filepath or URL to the updated FITS file containing WCS headers.
-                  sources_detected:
-                    type: integer
                   center_ra_deg:
                     type: number
                   center_dec_deg:
@@ -115,9 +125,9 @@ paths:
   /calibration/photometry:
     post:
       tags:
-        - Photometry
-      summary: Perform zero-point flux calibration from an existing WCS-solved FITS file.
-      operationId: catch_analysis_tools.app.services.calibration.photometry.run_photometry_pipeline
+        - Calibration
+      summary: Photometrically calibrate an image.
+      operationId: catch_analysis_tools.handlers.calibration.photometry.handler
       requestBody:
         required: true
         content:
@@ -125,24 +135,36 @@ paths:
             schema:
               type: object
               required:
-                - wcs_image_url
+                - image_url
               properties:
-                wcs_image_url:
+                image_url:
+                  description: Image to calibrate.
                   type: string
-                  example: "/Users/yaejikim/Documents/UMD/Research/PDS_CATCHI/catch-analysis-tools/catch_analysis_tools/app/outputs/astrometry/input_231de751_astrometry.fits"
-                  description: Persistent WCS-solved FITS path returned from the /astrometry endpoint.
-                aperture_radius:
+                  example: "https://sbnsurveys.astro.umd.edu/api/images/urn:nasa:pds:gbo.ast.atlas.survey.200:57491:02a57491o0502c.fits?ra=205.10371&dec=9.95205&size=10arcmin&format=fits"
+                snr_threshold:
+                  description: Signal-to-noise ratio threshold for source detection.
                   type: number
+                  default: 3.0
+                aperture_radius:
+                  description: Aperture radius for source brightness measurements
+                  type: number
+                  minimum: 0
+                  maximum: 30
                   default: 7.0
+                  example: 8.0
                 catalog:
+                  description: Photometric catalog.
                   type: string
-                  enum: [PanSTARRS1, Gaia, SDSS]
+                  enum: [PanSTARRS1, Gaia, SkyMapper]
                   default: PanSTARRS1
                 cal_band:
+                  description: Calibrate to this catalog photometric band.
                   type: string
                   default: r
-                color_term:
+                color_index:
+                  description: Calibrate with a color correction term using this catalog color index.
                   type: string
+                  nullable: true
                   default: "g-r"
                 return_plot:
                   type: boolean
@@ -203,8 +225,8 @@ paths:
   /subtract_median_background:
     post:
       tags:
-        - Background Estimation
-      operationId: catch_analysis_tools.app.services.subtract_median_background.perform_median_subtraction
+        - Analysis
+      operationId: catch_analysis_tools.services.subtract_median_background.perform_median_subtraction
       summary: "Compute the median background with source masking, saving the background-subtracted image as a new FITS file."
       parameters:
         - name: url
@@ -242,8 +264,8 @@ paths:
   /get_world_coordinates:
     post:
       tags:
-        - Target Search
-      operationId: catch_analysis_tools.app.services.photometry.get_world_coordinates
+        - Analysis
+      operationId: catch_analysis_tools.services.photometry.get_world_coordinates
       summary: "Retrieve the RA and Dec in decimal degrees from an (x,y) pixel location, using a supplied WCS file."
       parameters:
         - name: WCS_file
@@ -301,7 +323,7 @@ paths:
                 description: Output from photometry.get_world_coordinates(). Contains input location and output WCS values.
                 properties:
                   x:
-                    description: x pixel coordinate 
+                    description: x pixel coordinate
                     type: number
                   y:
                     description: y pixel coordinate
@@ -328,8 +350,8 @@ paths:
   /get_pixel_coordinates:
     post:
       tags:
-        - Target Search
-      operationId: catch_analysis_tools.app.services.photometry.get_pixel_coordinates
+        - Analysis
+      operationId: catch_analysis_tools.services.photometry.get_pixel_coordinates
       summary: "Retrieve the pixel (x,y) coordinates from RA and Dec world coordinates, using a supplied WCS file."
       parameters:
         - name: WCS_file
@@ -363,7 +385,7 @@ paths:
                 description: Output from photometry.get_pixel_coordinates(). Contains input location and output pixel coordinates.
                 properties:
                   x:
-                    description: x pixel coordinate (0-indexed) 
+                    description: x pixel coordinate (0-indexed)
                     type: number
                   y:
                     description: y pixel coordinate (0-indexed)
@@ -390,8 +412,8 @@ paths:
   /target_photometry:
     post:
       tags:
-        - Photometry
-      operationId: catch_analysis_tools.app.services.photometry.target_extraction
+        - Analysis
+      operationId: catch_analysis_tools.services.photometry.target_extraction
       summary: "Perform aperture photometry on a target using specified target and background aperture configurations."
       requestBody:
         required: true
@@ -513,8 +535,8 @@ paths:
   /centroid:
     post:
       tags:
-        - Target Search
-      operationId: catch_analysis_tools.app.services.photometry.centroid
+        - Analysis
+      operationId: catch_analysis_tools.services.photometry.centroid
       summary: "Find nearest target centroid to a user-specified point, with user-specified search radius."
       parameters:
         - name: file
@@ -595,4 +617,3 @@ paths:
                         nullable: true
                       error:
                         type: string
-                      
