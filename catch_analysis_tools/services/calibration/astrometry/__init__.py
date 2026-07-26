@@ -128,7 +128,7 @@ def run_pipeline(
     )
 
     return {
-        "wcs_image_url": output_file,
+        "output_fits": output_file,
         "center_ra_deg": float(center_world.ra.deg),
         "center_dec_deg": float(center_world.dec.deg),
         "pixel_scale": pixel_scale,

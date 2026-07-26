@@ -33,7 +33,7 @@ def test_run_pipeline(use_ra_dec):
     )
 
     # input file will be copied
-    assert results["wcs_image_url"] != input_fits
+    assert results["output_fits"] != input_fits
     assert np.isclose(results["center_ra_deg"], 51.1350620)
     assert np.isclose(results["center_dec_deg"], 17.3879501)
     assert np.isclose(results["pixel_scale"], 2.5293)

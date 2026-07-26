@@ -110,7 +110,7 @@ paths:
               schema:
                 type: object
                 properties:
-                  wcs_image_url:
+                  output_fits:
                     type: string
                     description: Filepath or URL to the updated FITS file containing WCS headers.
                   center_ra_deg:
