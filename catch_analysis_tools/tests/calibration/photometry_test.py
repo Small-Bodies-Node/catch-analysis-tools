@@ -326,7 +326,7 @@ def test_write_photometric_cal(synthetic_image, temporary_file):
         assert hdul[0].header["CAL_BAND"] == cal_band
         assert hdul[0].header["COLRINDX"] == str(color_index)
         assert np.isclose(hdul[0].header["ZP"], zero_point)
-        assert np.isclose(hdul[0].header["COLORTRM"], color_term)
+        assert np.isclose(hdul[0].header["COLRTERM"], color_term)
         assert np.isclose(hdul[0].header["ZP_UNC"], zero_point_uncertainty)
 
         assert np.allclose(hdul[0].data, image)
