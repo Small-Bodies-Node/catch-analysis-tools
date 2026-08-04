@@ -7,17 +7,10 @@ import connexion
 from connexion.middleware import MiddlewarePosition
 from starlette.middleware.cors import CORSMiddleware
 
-from .astrometry_readiness.start_astrometry_background_check import (
+from ..services.astrometry_readiness.start_astrometry_background_check import (
     start_astrometry_background_check,
 )
 
-# from . import __version__ as version
-# from .config.logging import get_logger
-# from .config.env import ENV
-# from .config.exceptions import SBNSISException
-# from .services.database_provider import db_session
-
-# logger: logging.Logger = get_logger()
 app = connexion.FlaskApp(__name__, specification_dir="api/")
 
 app.add_middleware(
