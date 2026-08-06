@@ -166,8 +166,8 @@ def run_pipeline(
                 color_mags,
                 m,
                 m_inst,
-                color_term,
                 zp,
+                color_term,
                 color_index,
             )
             plots["color_correction"] = _encode_figure(fig)

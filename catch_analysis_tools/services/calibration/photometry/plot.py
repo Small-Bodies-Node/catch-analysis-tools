@@ -52,9 +52,11 @@ def plot_color_correction(
         color_mags,
         calibrated_magnitude - instrumental_magnitude,
         marker=".",
+        label="sources",
     )
 
     x = np.linspace(0, 1.5, 100)
+    print(zero_point, color_term)
     ax.plot(
         x,
         color_term * x + zero_point,
@@ -64,6 +66,7 @@ def plot_color_correction(
 
     ax.set_xlabel(f"${color_index}$ (mag)")
     ax.set_ylabel(r"$m - m_{\mathrm{inst}}$ (mag)")
+    ax.minorticks_on()
     ax.legend()
 
     plt.tight_layout()
