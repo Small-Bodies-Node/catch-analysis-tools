@@ -166,9 +166,9 @@ def run_pipeline(
                 color_mags,
                 m,
                 m_inst,
-                color_term,
-                zp,
-                color_index,
+                zero_point=zp,
+                color_term=color_term,
+                color_index=color_index,
             )
             plots["color_correction"] = _encode_figure(fig)
             plt.close(fig)
@@ -179,6 +179,7 @@ def run_pipeline(
                 source_list,
                 matched_idx,
                 colored_idx,
+                wcs=wcs_solution,
             )
             plots["image_overlay"] = _encode_figure(fig)
             plt.close(fig)

@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 import astropy.units as u
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytest
@@ -23,6 +24,9 @@ from ...services.calibration.photometry.calibrate_photometric_zero_point import 
 )
 from ...services.calibration.photometry.detect import (
     detect_sources_on_background_subtracted_image,
+)
+from ...services.calibration.photometry.plot import (
+    plot_color_correction,
 )
 from ...services.calibration.photometry.write import (
     write_photometric_calibration_output,
@@ -106,6 +110,35 @@ def temporary_file():
 
     if os.path.exists(fn):
         os.remove(fn)
+
+
+def test_plot_color_correction_uses_fitted_equation():
+    color_mags = np.array([0.0, 0.5, 1.0])
+    zero_point = 27.4
+    color_term = 0.5
+    instrumental_magnitude = np.array([-8.0, -7.5, -7.0])
+    calibrated_magnitude = instrumental_magnitude + zero_point + color_term * color_mags
+
+    fig, ax = plot_color_correction(
+        color_mags,
+        calibrated_magnitude,
+        instrumental_magnitude,
+        zero_point=zero_point,
+        color_term=color_term,
+        color_index="g-r",
+    )
+
+    try:
+        fitted_line = ax.lines[0]
+        np.testing.assert_allclose(
+            fitted_line.get_ydata(),
+            color_term * fitted_line.get_xdata() + zero_point,
+        )
+        legend_labels = [text.get_text() for text in ax.get_legend().get_texts()]
+        assert "sources" in legend_labels
+        assert len(ax.xaxis.get_minorticklocs()) > 0
+    finally:
+        plt.close(fig)
 
 
 def test_detect_sources(synthetic_image):
@@ -381,7 +414,14 @@ def test_run_pipeline(synthetic_image, synthetic_wcs, temporary_file):  # noqa F
     output_fits = ""
 
     try:
-        with mock_calviacat(stars.N):
+        with (
+            mock_calviacat(stars.N),
+            patch(
+                "catch_analysis_tools.services.calibration.photometry"
+                ".plot_color_correction",
+                wraps=plot_color_correction,
+            ) as plot_color,
+        ):
             result = run_pipeline(
                 temporary_file,
                 3,
@@ -389,10 +429,15 @@ def test_run_pipeline(synthetic_image, synthetic_wcs, temporary_file):  # noqa F
                 "PanSTARRS1",
                 "r",
                 color_index="g-r",
-                return_plot=False,
+                return_plot=True,
+                plot_type="color_correction",
             )
             output_fits = result["output_fits"]
 
+        assert plot_color.call_args.kwargs["zero_point"] == stars.zp
+        assert plot_color.call_args.kwargs["color_term"] == stars.color_term
+        assert plot_color.call_args.kwargs["color_index"] == "g-r"
+        assert "color_correction" in result["plots"]
         assert result["photometry"]["zero_point"] == stars.zp
         assert result["photometry"]["color_term"] == stars.color_term
         assert result["photometry"]["uncertainty"] == 0.01

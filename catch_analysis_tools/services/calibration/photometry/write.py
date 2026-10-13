@@ -26,7 +26,7 @@ def write_photometric_calibration_output(
 
     primary_hdu = fits.PrimaryHDU(
         data=image_arr,
-        header=wcs_solution.to_header(),
+        header=wcs_solution.to_header(relax=True),
     )
 
     primary_hdu.header["CATALOG"] = catalog, "photometric catalog"

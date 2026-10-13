@@ -16,7 +16,7 @@ if [[ ! -f ".env" ]]; then
   exit 1
 fi
 
-if [ ! command -v docker >/dev/null 2>&1 ]; then
+if ! command -v docker >/dev/null 2>&1; then
   echo "Docker command not found. Install Docker and try again." >&2
   exit 1
 fi
@@ -42,7 +42,19 @@ if [[ "${cat_arch}" == "arm64" ]]; then
   build_platform="linux/arm64"
 fi
 
-build_cmd="docker build --platform ${build_platform} --tag \"${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_TAG}\" --file Dockerfile ."
+if [[ -n "${PACKAGE_VERSION:-}" ]]; then
+  package_version="${PACKAGE_VERSION}"
+else
+  source_revision="$(git rev-parse --short HEAD 2>/dev/null || printf 'unknown')"
+  package_version="0.0.0+g${source_revision}"
+  if ! git diff --quiet --ignore-submodules HEAD --; then
+    package_version="${package_version}.dirty"
+  fi
+fi
+
+# Local Docker stores can fail to import the attestation manifest for a
+# cross-platform image. The deployed image itself does not need that metadata.
+build_cmd="docker build --platform ${build_platform} --provenance=false --build-arg \"PACKAGE_VERSION=${package_version}\" --tag \"${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_TAG}\" --file Dockerfile ."
 
 echo "The .env file has been sourced. Do you wish to proceed with these docker commands:"
 highlight "${build_cmd}"

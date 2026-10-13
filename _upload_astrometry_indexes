@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Build a checksum manifest and optionally upload local astrometry indexes.
+
+set -euo pipefail
+IFS=$'\n\t'
+
+if [[ -f ".env" ]]; then
+  # Load optional AWS/Terraform values without printing them.
+  set -a
+  # shellcheck disable=SC1091
+  source .env
+  set +a
+fi
+
+# Terraform derives a bucket name when no explicit override is configured.
+if [[ -z "${CAT_ASTROMETRY_INDEX_BUCKET:-}" && -z "${TF_VAR_CAT_ASTROMETRY_INDEX_BUCKET_NAME:-}" ]] \
+  && command -v tofu >/dev/null 2>&1; then
+  if bucket_from_state="$(tofu output -raw cat_astrometry_index_bucket_name 2>/dev/null)"; then
+    export CAT_ASTROMETRY_INDEX_BUCKET="${bucket_from_state}"
+  fi
+fi
+
+exec python3 scripts/upload_astrometry_indexes.py "$@"

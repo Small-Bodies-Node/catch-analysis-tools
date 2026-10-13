@@ -52,3 +52,13 @@ output "cat_cache_prefix" {
   description = "S3 key prefix used for CAT route JSON result cache"
   value       = var.CAT_CACHE_PREFIX
 }
+
+output "cat_astrometry_index_bucket_name" {
+  description = "Private S3 bucket containing canonical Astrometry.net indexes"
+  value       = aws_s3_bucket.cat_astrometry_indexes.bucket
+}
+
+output "cat_astrometry_index_prefix" {
+  description = "S3 key prefix containing the astrometry index manifest and FITS files"
+  value       = var.CAT_ASTROMETRY_INDEX_PREFIX
+}

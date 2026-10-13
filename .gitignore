@@ -1,6 +1,5 @@
 # dwd-dev stuff
 AGENTS.md
-.devcontainer
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -186,3 +185,12 @@ Thumbs.db
 
 catch_analysis_tools/version.py
 .venv/
+.devcontainer
+
+# Large Astrometry.net reference files stay local and must never enter Git.
+/local-data/astrometry-indexes/*
+!/local-data/astrometry-indexes/README.md
+!/local-data/astrometry-indexes/astrometry-index-manifest.json
+
+# Temporary landing path while restoring the backup copy.
+/local-data/data/

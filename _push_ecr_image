@@ -84,4 +84,9 @@ docker tag "${local_image}" "${remote_image}"
 highlight "Executing: ${push_cmd}"
 docker push "${remote_image}"
 
-echo "Image pushed successfully: ${remote_image}"
+echo "Image pushed successfully to ECR: ${remote_image}"
+echo
+echo "This push did not deploy the image to ECS."
+echo "To review and deploy the new image tag, run:"
+echo "  ./_tf plan"
+echo "  ./_tf apply"

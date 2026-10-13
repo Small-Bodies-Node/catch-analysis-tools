@@ -37,6 +37,7 @@ locals {
   cat_images_base_url    = "https://${aws_cloudfront_distribution.cat_images.domain_name}"
   cat_images_bucket_name = coalesce(var.S3_BUCKET_NAME, var.CAT_IMAGES_BUCKET_NAME)
   cat_cache_bucket_name  = coalesce(var.CAT_CACHE_BUCKET_NAME, "${local.normalized_name_prefix}cache")
+  cat_astrometry_index_bucket_name = coalesce(var.CAT_ASTROMETRY_INDEX_BUCKET_NAME, "${local.normalized_name_prefix}astrometry-indexes")
 }
 
 resource "aws_ecr_repository" "app" {
@@ -317,6 +318,64 @@ resource "aws_s3_bucket_lifecycle_configuration" "cat_cache" {
   }
 }
 
+resource "aws_s3_bucket" "cat_astrometry_indexes" {
+  bucket = local.cat_astrometry_index_bucket_name
+
+  tags = {
+    Name = local.cat_astrometry_index_bucket_name
+  }
+}
+
+resource "aws_s3_bucket_versioning" "cat_astrometry_indexes" {
+  bucket = aws_s3_bucket.cat_astrometry_indexes.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_ownership_controls" "cat_astrometry_indexes" {
+  bucket = aws_s3_bucket.cat_astrometry_indexes.id
+
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "cat_astrometry_indexes" {
+  bucket = aws_s3_bucket.cat_astrometry_indexes.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "cat_astrometry_indexes" {
+  bucket = aws_s3_bucket.cat_astrometry_indexes.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "cat_astrometry_indexes" {
+  bucket = aws_s3_bucket.cat_astrometry_indexes.id
+
+  rule {
+    id     = "clean-incomplete-astrometry-index-uploads"
+    status = "Enabled"
+
+    filter {}
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+}
+
 resource "aws_efs_file_system" "astrometry_data" {
   creation_token   = "${local.name_prefix}astrometry-data"
   performance_mode = var.EFS_PERFORMANCE_MODE
@@ -427,6 +486,39 @@ resource "aws_iam_role_policy" "ecs_task_cat_cache" {
   })
 }
 
+resource "aws_iam_role_policy" "ecs_task_cat_astrometry_indexes" {
+  name = "${local.name_prefix}cat-astrometry-indexes"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject"
+        ]
+        Resource = "${aws_s3_bucket.cat_astrometry_indexes.arn}/${var.CAT_ASTROMETRY_INDEX_PREFIX}*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket"
+        ]
+        Resource = aws_s3_bucket.cat_astrometry_indexes.arn
+        Condition = {
+          StringLike = {
+            "s3:prefix" = [
+              var.CAT_ASTROMETRY_INDEX_PREFIX,
+              "${var.CAT_ASTROMETRY_INDEX_PREFIX}*"
+            ]
+          }
+        }
+      }
+    ]
+  })
+}
+
 resource "aws_ecs_cluster" "main" {
   name = local.cluster_name
 }
@@ -467,6 +559,14 @@ resource "aws_ecs_task_definition" "app" {
         {
           name  = "DOCKER_IMAGE_TAG"
           value = var.DOCKER_IMAGE_TAG
+        },
+        {
+          name  = "CAT_ASTROMETRY_INDEX_BUCKET"
+          value = aws_s3_bucket.cat_astrometry_indexes.bucket
+        },
+        {
+          name  = "CAT_ASTROMETRY_INDEX_PREFIX"
+          value = var.CAT_ASTROMETRY_INDEX_PREFIX
         },
         {
           name  = "AWS_REGION"
@@ -522,6 +622,7 @@ resource "aws_ecs_task_definition" "app" {
     aws_iam_role_policy_attachment.ecs_task_execution_default,
     aws_iam_role_policy.ecs_task_cat_images,
     aws_iam_role_policy.ecs_task_cat_cache,
+    aws_iam_role_policy.ecs_task_cat_astrometry_indexes,
     aws_efs_mount_target.astrometry_data,
   ]
 }
