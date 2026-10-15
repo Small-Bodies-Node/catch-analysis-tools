@@ -2,7 +2,6 @@ import threading
 
 from . import state
 from .background_prepare_astrometry_data import background_prepare_astrometry_data
-from .constants import INDEX_URL
 from .get_current_time import get_current_time
 from .get_index_dir import get_index_dir
 
@@ -19,8 +18,9 @@ def start_astrometry_background_check(force=False):
                 "ready": False,
                 "message": "Astrometry data readiness check has started.",
                 "index_dir": str(get_index_dir()),
-                "index_url": INDEX_URL,
+                "index_source": None,
                 "expected_files": None,
+                "current_file": None,
                 "error": None,
                 "updated_at": get_current_time(),
             }

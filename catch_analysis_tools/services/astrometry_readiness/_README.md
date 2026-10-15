@@ -1,10 +1,11 @@
 # Astrometry Readiness
 
-This package is runtime plumbing for `/astrometry`. It exists so the app does
-not call Astrometry.net's `solve-field` until the required index FITS files are
-present on disk.
+This package is runtime plumbing for `/calibration/astrometry`. It exists so
+the app does not call Astrometry.net's `solve-field` until the required index
+FITS files are present on disk.
 
-This is not scientific astrometry code. The scientific route only taps into this plumbing with two simple questions answered by the following hooks:
+This is not scientific astrometry code. The scientific route only taps into
+this plumbing with two simple questions answered by the following hooks:
 
 ```python
 is_astrometry_ready()
@@ -28,19 +29,19 @@ That path is intentionally the same in every environment.
 In AWS Fargate, Terraform configures ECS to mount EFS at that container path.
 All Fargate tasks for this service see the same EFS-backed directory.
 
-In local development, `docker compose up` uses this bind mount:
+In local development, `docker compose up` bind-mounts the repository's restored
+index directory:
 
 ```yaml
-${HOME}/.astrometry/data:/root/.astrometry/data
+./local-data/astrometry-indexes:/root/.astrometry/data
 ```
 
-So local downloads are written to the host machine at:
+The local files persist across container rebuilds and are used directly; they
+are not copied into the Docker image. In AWS, an empty EFS volume is seeded
+from the private S3 index bucket instead.
 
-```text
-${HOME}/.astrometry/data
-```
-
-Those files persist across local container rebuilds and restarts.
+Both environments use `astrometry-index-manifest.json` as the authoritative
+inventory. It records every expected filename, byte size, and SHA-256 checksum.
 
 ## Startup Flow
 
@@ -73,10 +74,11 @@ While the background thread is still working:
 
 - `/hello` can respond normally.
 - `/health` reports the current readiness status.
-- `/astrometry` returns `503 not_ready` instead of trying `solve-field`.
+- `/calibration/astrometry` returns `503 not_ready` instead of trying
+  `solve-field`.
 
 After the background thread confirms all expected index files exist,
-`/astrometry` is allowed to run the scientific pipeline.
+`/calibration/astrometry` is allowed to run the scientific pipeline.
 
 ## What State Lives In RAM
 
@@ -123,15 +125,14 @@ It does not make RAM global.
 The cross-process guard is the index-download file lock:
 
 ```text
-/root/.astrometry/.index-download.lock
+/root/.astrometry/data/.index-download.lock
 ```
 
-This file sits next to the shared index directory. Because Fargate mounts EFS
-at `/root/.astrometry/data`, every Fargate task sees the same parent directory
-and therefore the same lock file.
+This file is inside the shared index directory. Because Fargate mounts EFS at
+`/root/.astrometry/data`, every Fargate task sees the same lock file.
 
 The same model is used locally because Docker Compose bind-mounts the host's
-`${HOME}/.astrometry/data` to `/root/.astrometry/data`.
+`local-data/astrometry-indexes` directory to `/root/.astrometry/data`.
 
 When an app instance finds that index files are missing, it tries to acquire an
 exclusive `flock` on the lock file. Only one process can hold that lock at a
@@ -154,19 +155,20 @@ This is the part that makes simultaneous Fargate startups safe.
 
 The readiness preparation function does this:
 
-1. Fetches the upstream directory listing from `INDEX_URL`.
-2. Extracts the expected `index-*.fits` filenames.
-3. Counts which expected files already exist locally and are non-empty.
+1. Loads the local manifest if it is already present.
+2. Otherwise, downloads the manifest from the configured private S3 bucket.
+3. Checks local files against the expected filenames and byte sizes.
 4. If all files are present, marks this process ready.
 5. If files are missing, acquires the global file lock.
 6. Rechecks the files after acquiring the lock.
-7. Downloads only missing files.
-8. Recounts the files.
-9. Marks this process ready if all expected files are now present.
+7. Downloads only missing or invalid files from S3 into temporary files.
+8. Verifies each download's byte size and SHA-256 checksum before renaming it.
+9. Marks this process ready after all expected files pass validation.
 
-The current completeness check is intentionally simple: an expected file counts
-as present if it exists and has size greater than zero. It does not currently
-deep-validate every FITS file.
+A normal startup uses filename and size checks for existing local files. A
+forced `/reset` additionally verifies their SHA-256 checksums. Every newly
+downloaded file is checksum-verified before it becomes visible at its final
+path.
 
 ## Sentinel File
 
@@ -188,12 +190,12 @@ new expensive check by itself.
 `/reset` starts a forced readiness check in the background for the current app
 process.
 
-`/astrometry` first checks the current process's in-memory readiness flag. If
-that flag is false, it returns `503 not_ready` with the current readiness
-status. It does not run the expensive file check on every request.
+`/calibration/astrometry` first checks the current process's in-memory readiness
+flag. If that flag is false, it returns `503 not_ready` with the current
+readiness status. It does not run the expensive file check on every request.
 
-This keeps normal `/astrometry` requests cheap once the process has marked
-itself ready.
+This keeps normal `/calibration/astrometry` requests cheap once the process has
+marked itself ready.
 
 ## Failure Behavior
 
@@ -205,8 +207,8 @@ ready=false
 error=<exception message>
 ```
 
-Then `/health` exposes that error and `/astrometry` continues returning
-`503 not_ready`.
+Then `/health` exposes that error and `/calibration/astrometry` continues
+returning `503 not_ready`.
 
 The app process itself does not crash just because the background readiness
 thread failed.
@@ -220,7 +222,7 @@ Within one Python process:
   threading.RLock protects the in-memory status dictionary.
 
 Across Fargate tasks or containers:
-  flock on /root/.astrometry/.index-download.lock protects the shared
+  flock on /root/.astrometry/data/.index-download.lock protects the shared
   index directory.
 ```
 

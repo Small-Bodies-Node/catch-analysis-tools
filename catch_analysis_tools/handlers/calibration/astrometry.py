@@ -15,6 +15,11 @@ from ...services.astrometry_readiness.get_astrometry_readiness_status import (
 )
 from ...services.astrometry_readiness.is_astrometry_ready import is_astrometry_ready
 from ...services.calibration.astrometry import run_pipeline
+from ...services.generated_images import (
+    GeneratedArtifactUploadError,
+    upload_generated_file,
+)
+from ...services.publish_preview import publish_preview
 from ...services.result_cache import get_or_compute
 
 logger = logging.getLogger(__name__)
@@ -25,36 +30,81 @@ def json_response(payload, status):
 
 
 def validate(body: dict[str, Any]) -> dict[str, Any]:
-    """Logical validation of POST data."""
+    """Validate and normalize inputs before building the cache key."""
+    image_url = body.get("image_url")
+    if not image_url:
+        raise InputValidationError("image_url is required")
 
-    if body["use_ra_dec"] and None in [body["ra"], body["dec"]]:
+    config = {
+        "image_url": image_url,
+        "ra": body.get("ra"),
+        "dec": body.get("dec"),
+        "use_ra_dec": body.get("use_ra_dec", False),
+        "pixel_scale": body.get("pixel_scale", 2.5),
+        "scale_low": body.get("scale_low"),
+        "scale_high": body.get("scale_high"),
+        "search_radius": body.get("search_radius", 2.0),
+    }
+
+    if config["use_ra_dec"] and None in [config["ra"], config["dec"]]:
         raise InputValidationError("ra and dec are required when use_ra_dec is true")
 
+    if (
+        config["scale_low"] is not None
+        and config["scale_high"] is not None
+        and config["scale_low"] > config["scale_high"]
+    ):
+        raise InputValidationError("scale_low must be less than or equal to scale_high")
 
-def _run_astrometry_uncached(body):
+    return config
+
+
+def _run_astrometry_uncached(config):
     try:
-        response = requests.get(body["image_url"], timeout=60)
+        response = requests.get(config["image_url"], timeout=60)
         response.raise_for_status()
     except requests.RequestException:
         raise BadRequest("Could not retrieve FITS image")
 
+    output_fits = None
     with NamedTemporaryFile(suffix=".fits", delete=False) as tmp:
         tmp.write(response.content)
         tmp_path = tmp.name
 
     try:
-        return run_pipeline(
+        result = run_pipeline(
             tmp_path,
-            body["ra"],
-            body["dec"],
-            body["use_ra_dec"],
-            body["pixel_scale"],
-            scale_low=body["scale_low"],
-            scale_high=body["scale_high"],
-            search_radius=body["search_radius"],
+            config["ra"],
+            config["dec"],
+            config["use_ra_dec"],
+            config["pixel_scale"],
+            scale_low=config["scale_low"],
+            scale_high=config["scale_high"],
+            search_radius=config["search_radius"],
         )
+        output_fits = result["output_fits"]
+
+        # Published FITS files survive task replacement and can feed photometry.
+        uploaded = upload_generated_file(
+            output_fits,
+            "calibration-astrometry",
+            "astrometry.fits",
+            "application/fits",
+        )
+        return {
+            **publish_preview(output_fits, "calibration-astrometry"),
+            "status": "success",
+            "wcs_image_url": uploaded["url"],
+            "wcs_image_s3_key": uploaded["key"],
+            "center_ra_deg": result["center_ra_deg"],
+            "center_dec_deg": result["center_dec_deg"],
+            "pixel_scale": result["pixel_scale"],
+        }
     finally:
-        os.remove(tmp_path)
+        if output_fits and os.path.exists(output_fits):
+            os.remove(output_fits)
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
 
 def handler(body):
@@ -79,18 +129,17 @@ def handler(body):
 
     try:
         stage = "validate_request"
-        validate(body)
+        config = validate(body)
 
         stage = "cache_or_run_pipeline"
         results = get_or_compute(
-            "astrometry",
-            body,
-            lambda: _run_astrometry_uncached(body),
+            "calibration-astrometry",
+            config,
+            lambda: _run_astrometry_uncached(config),
         )
 
-        stage = "run_pipeline"
+        stage = "build_response"
         results["request_id"] = request_id
-        results["image_url"] = image_url
         return results, 200, {"Content-Type": "application/json"}
     except InputValidationError as exc:
         payload = {
@@ -127,6 +176,21 @@ def handler(body):
             "image_url": image_url,
         }
         return json_response(payload, 422)
+    except GeneratedArtifactUploadError as exc:
+        logger.exception(
+            "Astrometry FITS upload failed [request_id=%s stage=%s image_url=%r]",
+            request_id,
+            stage,
+            image_url,
+        )
+        payload = {
+            "status": "artifact_upload_failed",
+            "message": str(exc),
+            "request_id": request_id,
+            "stage": stage,
+            "image_url": image_url,
+        }
+        return json_response(payload, 500)
     except Exception as exc:
         logger.exception(
             "Astrometry request failed [request_id=%s stage=%s image_url=%r]",

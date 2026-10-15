@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from .generated_images import _get_aws_client_kwargs, _public_url
 
-CACHE_VERSION = "v1"
+CACHE_VERSION = "v3-north-up"
 
 
 def _clean_prefix(prefix):
@@ -49,18 +49,9 @@ def make_cache_key(route_name, inputs):
 
 
 def _cache_bucket():
-    bucket = os.environ.get("CAT_CACHE_BUCKET") or os.environ.get(
+    return os.environ.get("CAT_CACHE_BUCKET") or os.environ.get(
         "TF_VAR_CAT_CACHE_BUCKET_NAME"
     )
-    if bucket:
-        return bucket
-
-    project_prefix = (
-        os.environ.get("TF_VAR_PROJECT_PREFIX")
-        or os.environ.get("PROJECT_PREFIX")
-        or "sbn-cat-"
-    )
-    return f"{project_prefix.lower().replace('_', '-')}cache"
 
 
 def _s3_client():
@@ -141,15 +132,31 @@ def _refresh_image_urls(payload):
     if not base_url and bucket:
         base_url = f"https://{bucket}.s3.{region}.amazonaws.com"
 
-    if base_url and payload.get("centroid_figure_s3_key"):
-        url = _public_url(base_url, payload["centroid_figure_s3_key"])
-        payload["centroid_figure"] = url
-        payload["centroid_figure_url"] = url
+    if not base_url:
+        return payload
 
-    if base_url and payload.get("aperture_figure_s3_key"):
-        url = _public_url(base_url, payload["aperture_figure_s3_key"])
-        payload["aperture_figure"] = url
-        payload["aperture_figure_url"] = url
+    # Rebuild public URLs from stable S3 keys when deployment domains change.
+    top_level_artifacts = {
+        "centroid_figure_s3_key": ("centroid_figure", "centroid_figure_url"),
+        "aperture_figure_s3_key": ("aperture_figure", "aperture_figure_url"),
+        "wcs_image_s3_key": ("wcs_image_url",),
+        "photometry_image_s3_key": ("photometry_image_url",),
+        "preview_s3_key": ("preview_url",),
+    }
+    for key_field, url_fields in top_level_artifacts.items():
+        s3_key = payload.get(key_field)
+        if not s3_key:
+            continue
+        url = _public_url(base_url, s3_key)
+        for url_field in url_fields:
+            payload[url_field] = url
+
+    # Calibration plots use a nested structure so related metadata stays together.
+    plots = payload.get("plots") if isinstance(payload.get("plots"), dict) else {}
+    for plot in plots.values():
+        if not isinstance(plot, dict) or not plot.get("s3_key"):
+            continue
+        plot["url"] = _public_url(base_url, plot["s3_key"])
 
     return payload
 

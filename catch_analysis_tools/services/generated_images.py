@@ -3,6 +3,10 @@ import os
 from uuid import uuid4
 
 
+class GeneratedArtifactUploadError(RuntimeError):
+    """Raised when a generated route artifact cannot be uploaded."""
+
+
 def _clean_prefix(prefix):
     if not prefix:
         return ""
@@ -51,13 +55,11 @@ def _get_aws_client_kwargs(region):
     return kwargs
 
 
-def upload_figure_png(fig, route_name, image_name):
-    """Upload a Matplotlib figure to the public CAT images bucket."""
-    import boto3
-
+def _get_storage_target(route_name, artifact_name):
+    """Resolve the bucket, object key, and public URL for an artifact."""
     bucket = _get_bucket_name()
     if not bucket:
-        raise RuntimeError(
+        raise GeneratedArtifactUploadError(
             "CAT_IMAGES_BUCKET is not set. Set CAT_IMAGES_BUCKET for runtime, "
             "or TF_VAR_CAT_IMAGES_BUCKET_NAME / TF_VAR_S3_BUCKET_NAME for local Docker."
         )
@@ -72,21 +74,9 @@ def upload_figure_png(fig, route_name, image_name):
     )
 
     key_parts = [
-        part for part in [prefix, route_name, f"{uuid4().hex}-{image_name}"] if part
+        part for part in [prefix, route_name, f"{uuid4().hex}-{artifact_name}"] if part
     ]
     key = "/".join(key_parts)
-
-    image_buffer = io.BytesIO()
-    fig.savefig(image_buffer, format="png", dpi=150, bbox_inches="tight")
-    image_buffer.seek(0)
-
-    boto3.client("s3", **_get_aws_client_kwargs(region)).put_object(
-        Bucket=bucket,
-        Key=key,
-        Body=image_buffer.getvalue(),
-        ContentType="image/png",
-        CacheControl="public, max-age=86400",
-    )
 
     if not base_url:
         if region:
@@ -98,4 +88,91 @@ def upload_figure_png(fig, route_name, image_name):
         "url": _public_url(base_url, key),
         "bucket": bucket,
         "key": key,
+        "region": region,
     }
+
+
+def _public_upload_metadata(target):
+    """Return metadata that callers may include in API responses."""
+    return {
+        "url": target["url"],
+        "bucket": target["bucket"],
+        "key": target["key"],
+    }
+
+
+def upload_figure_png(fig, route_name, image_name):
+    """Upload a Matplotlib figure to the public CAT images bucket."""
+    import boto3
+
+    target = _get_storage_target(route_name, image_name)
+    image_buffer = io.BytesIO()
+    fig.savefig(image_buffer, format="png", dpi=150, bbox_inches="tight")
+
+    try:
+        boto3.client("s3", **_get_aws_client_kwargs(target["region"])).put_object(
+            Bucket=target["bucket"],
+            Key=target["key"],
+            Body=image_buffer.getvalue(),
+            ContentType="image/png",
+            CacheControl="public, max-age=86400",
+        )
+    except Exception as exc:
+        raise GeneratedArtifactUploadError(
+            f"Could not upload generated image '{image_name}'."
+        ) from exc
+
+    return _public_upload_metadata(target)
+
+
+def upload_generated_bytes(
+    data, route_name, artifact_name, content_type, cache_control="public, max-age=86400"
+):
+    """Upload an in-memory artifact and return its public S3 location."""
+    import boto3
+
+    target = _get_storage_target(route_name, artifact_name)
+    try:
+        boto3.client("s3", **_get_aws_client_kwargs(target["region"])).put_object(
+            Bucket=target["bucket"],
+            Key=target["key"],
+            Body=data,
+            ContentType=content_type,
+            CacheControl=cache_control,
+        )
+    except Exception as exc:
+        raise GeneratedArtifactUploadError(
+            f"Could not upload generated artifact '{artifact_name}'."
+        ) from exc
+
+    return _public_upload_metadata(target)
+
+
+def upload_generated_file(file_path, route_name, artifact_name, content_type):
+    """Upload a generated file and return its public S3 location."""
+    import boto3
+
+    if not os.path.isfile(file_path):
+        raise GeneratedArtifactUploadError(
+            f"Generated artifact does not exist: {file_path}"
+        )
+
+    target = _get_storage_target(route_name, artifact_name)
+
+    try:
+        # Stream larger FITS artifacts instead of loading them all into memory.
+        boto3.client("s3", **_get_aws_client_kwargs(target["region"])).upload_file(
+            file_path,
+            target["bucket"],
+            target["key"],
+            ExtraArgs={
+                "ContentType": content_type,
+                "CacheControl": "public, max-age=86400",
+            },
+        )
+    except Exception as exc:
+        raise GeneratedArtifactUploadError(
+            f"Could not upload generated artifact '{artifact_name}'."
+        ) from exc
+
+    return _public_upload_metadata(target)

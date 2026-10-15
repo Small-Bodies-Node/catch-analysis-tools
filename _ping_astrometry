@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Resolve service URL from OpenTofu outputs and test POST /astrometry.
+# Resolve the service URL and test POST /calibration/astrometry.
 # Use --local to ping the locally running docker-compose app.
 
 set -euo pipefail
@@ -64,23 +64,17 @@ else
   fi
 fi
 
-endpoint="${service_base_url%/}/astrometry"
+endpoint="${service_base_url%/}/calibration/astrometry"
 echo "Pinging: ${endpoint}"
 
-# /wcs POST
+# This probe only exercises stage-one astrometry inputs.
 
 payload='{
     "image_url": "https://uxzqjwo0ye.execute-api.us-west-1.amazonaws.com/api/images/urn:nasa:pds:gbo.ast.loneos.survey:data_augmented:060104_1a_099_fits?ra=51.11064&dec=17.38378&size=12.60arcmin&format=fits",
     "ra": 51.11064,
     "dec": 17.38378,
     "use_ra_dec": true,
-    "pixel_scale": 2.5,
-    "snr_threshold": 3.0,
-    "aperture_radius": 7.0,
-    "catalog": "PanSTARRS1",
-    "obs_band": "g",
-    "cal_band": "r",
-    "return_plot": false
+    "pixel_scale": 2.5
   }'
 
 printf 'Executing:\n'

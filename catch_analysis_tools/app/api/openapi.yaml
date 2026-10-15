@@ -56,7 +56,7 @@ paths:
     post:
       tags:
         - Calibration
-      summary: Perform geometric plate solving and update FITS headers with WCS data.
+      summary: Perform geometric plate solving and publish a WCS-calibrated FITS file.
       operationId: catch_analysis_tools.handlers.calibration.astrometry.handler
       requestBody:
         required: true
@@ -69,17 +69,18 @@ paths:
               properties:
                 image_url:
                   type: string
+                  description: Public URL for the input FITS image.
                   example: "https://uxzqjwo0ye.execute-api.us-west-1.amazonaws.com/api/images/urn:nasa:pds:gbo.ast.loneos.survey:data_augmented:060104_1a_099_fits?ra=51.11064&dec=17.38378&size=12.60arcmin&format=fits"
                 ra:
                   description: Image right ascension guess (degrees).
                   type: number
                   nullable: true
-                  example: 51.11064
+                  default: null
                 dec:
                   description: Image declination guess (degrees).
                   type: number
                   nullable: true
-                  example: 17.38378
+                  default: null
                 use_ra_dec:
                   description: Set to true to use (ra, dec) as a guess.
                   type: boolean
@@ -89,12 +90,12 @@ paths:
                   type: number
                   default: 2.5
                 scale_low:
-                  description: Lower limit on image pixel scale (arcsec/pix)
+                  description: Lower limit on image pixel scale (arcsec/pix).
                   type: number
                   nullable: true
                   default: null
                 scale_high:
-                  description: Upper limit on image pixel scale (arcsec/pix)
+                  description: Upper limit on image pixel scale (arcsec/pix).
                   type: number
                   nullable: true
                   default: null
@@ -104,108 +105,42 @@ paths:
                   default: 2.0
       responses:
         "200":
-          description: WCS geometric calculation successful. Returns updated FITS location.
+          description: Astrometry succeeded and the WCS FITS file was uploaded to S3.
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  output_fits:
+                  status:
                     type: string
-                    description: Filepath or URL to the updated FITS file containing WCS headers.
+                    enum: [success]
+                  wcs_image_url:
+                    type: string
+                    format: uri
+                    description: Public URL for the WCS-calibrated FITS file.
+                  wcs_image_s3_key:
+                    type: string
+                  preview_url:
+                    type: string
+                    format: uri
+                    description: North-up, east-left PNG with AVM for this exact WCS FITS revision.
+                  preview_s3_key:
+                    type: string
+                  preview_orientation:
+                    type: string
+                    enum: [north-up-east-left]
+                  preview_renderer_version:
+                    type: string
                   center_ra_deg:
                     type: number
                   center_dec_deg:
                     type: number
                   pixel_scale:
                     type: number
-        "422":
-          description: Astrometry engine could not solve the submitted field image.
-
-  /calibration/photometry:
-    post:
-      tags:
-        - Calibration
-      summary: Photometrically calibrate an image.
-      operationId: catch_analysis_tools.handlers.calibration.photometry.handler
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - image_url
-              properties:
-                image_url:
-                  description: Image to calibrate.
-                  type: string
-                  example: "https://sbnsurveys.astro.umd.edu/api/images/urn:nasa:pds:gbo.ast.atlas.survey.200:57491:02a57491o0502c.fits?ra=205.10371&dec=9.95205&size=10arcmin&format=fits"
-                snr_threshold:
-                  description: Signal-to-noise ratio threshold for source detection.
-                  type: number
-                  default: 3.0
-                aperture_radius:
-                  description: Aperture radius for source brightness measurements
-                  type: number
-                  minimum: 0
-                  maximum: 30
-                  default: 7.0
-                  example: 8.0
-                catalog:
-                  description: Photometric catalog.
-                  type: string
-                  enum: [PanSTARRS1, Gaia, SkyMapper]
-                  default: PanSTARRS1
-                cal_band:
-                  description: Calibrate to this catalog photometric band.
-                  type: string
-                  default: r
-                color_index:
-                  description: Calibrate with a color correction term using this catalog color index.
-                  type: string
-                  nullable: true
-                  default: "g-r"
-                return_plot:
-                  type: boolean
-                  default: false
-                plot_type:
-                  type: string
-                  enum: [color_correction, image_overlay]
-                  default: color_correction
-      responses:
-        "200":
-          description: JSON results or PNG plot image.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  photometry:
-                    type: object
-                    properties:
-                      zero_point:
-                        type: number
-                      color_term:
-                        type: number
-                      uncertainty:
-                        type: number
-                  sources:
-                    type: object
-                    properties:
-                      matched:
-                        type: integer
-                  plots:
-                    type: object
-                    description: Base64 encoded PNG plots, optional for JSON responses.
-                    properties:
-                      color_correction:
-                        type: string
-                      image_overlay:
-                        type: string
+                  request_id:
+                    type: string
                   cache:
                     type: object
-                    description: S3 JSON result cache metadata. Present for JSON responses.
                     properties:
                       enabled:
                         type: boolean
@@ -216,12 +151,150 @@ paths:
                         nullable: true
                       error:
                         type: string
+        "400":
+          description: Invalid astrometry request.
+        "422":
+          description: The astrometry engine could not solve the submitted image.
+        "503":
+          description: Astrometry index reference data is not ready yet.
+        "500":
+          description: The route failed or could not upload the generated FITS file.
 
-            image/png:
+  /calibration/photometry:
+    post:
+      tags:
+        - Calibration
+      summary: Calibrate photometry and publish its FITS file and both diagnostic plots.
+      operationId: catch_analysis_tools.handlers.calibration.photometry.handler
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - wcs_image_url
+              properties:
+                wcs_image_url:
+                  description: Public WCS FITS URL returned by /calibration/astrometry.
+                  type: string
+                  format: uri
+                snr_threshold:
+                  description: Signal-to-noise ratio threshold for source detection.
+                  type: number
+                  minimum: 0
+                  default: 3.0
+                aperture_radius:
+                  description: Aperture radius for source brightness measurements.
+                  type: number
+                  minimum: 0
+                  maximum: 30
+                  default: 7.0
+                catalog:
+                  description: Photometric catalog.
+                  type: string
+                  enum: [PanSTARRS1, Gaia, SkyMapper]
+                  default: PanSTARRS1
+                cal_band:
+                  description: Calibrate to this catalog photometric band.
+                  type: string
+                  default: r
+                color_term:
+                  description: Catalog color-index label, for example g-r.
+                  type: string
+                  default: "g-r"
+      responses:
+        "200":
+          description: Calibration results and public URLs for all generated artifacts.
+          content:
+            application/json:
               schema:
-                type: string
-                format: binary
-
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [success]
+                  photometry:
+                    type: object
+                    properties:
+                      zero_point:
+                        type: number
+                      color_term:
+                        type: number
+                        description: Fitted numeric color-term coefficient.
+                      uncertainty:
+                        type: number
+                      color_index:
+                        type: string
+                        description: Requested color-index label, for example g-r.
+                      catalog:
+                        type: string
+                      cal_band:
+                        type: string
+                  sources:
+                    type: object
+                    properties:
+                      detected:
+                        type: integer
+                      matched:
+                        type: integer
+                  photometry_image_url:
+                    type: string
+                    format: uri
+                    description: Public URL for the photometrically calibrated FITS file.
+                  photometry_image_s3_key:
+                    type: string
+                  preview_url:
+                    type: string
+                    format: uri
+                    description: North-up, east-left PNG with AVM for this exact calibrated FITS revision.
+                  preview_s3_key:
+                    type: string
+                  preview_orientation:
+                    type: string
+                    enum: [north-up-east-left]
+                  preview_renderer_version:
+                    type: string
+                  plots:
+                    type: object
+                    description: Both diagnostic plots generated during this calibration.
+                    properties:
+                      color_correction:
+                        type: object
+                        properties:
+                          url:
+                            type: string
+                            format: uri
+                          s3_key:
+                            type: string
+                      image_overlay:
+                        type: object
+                        properties:
+                          url:
+                            type: string
+                            format: uri
+                          s3_key:
+                            type: string
+                  request_id:
+                    type: string
+                  cache:
+                    type: object
+                    properties:
+                      enabled:
+                        type: boolean
+                      hit:
+                        type: boolean
+                      key:
+                        type: string
+                        nullable: true
+                      error:
+                        type: string
+        "400":
+          description: Invalid photometry request.
+        "422":
+          description: Photometric calibration failed.
+        "500":
+          description: The route failed or could not upload every generated artifact.
   /subtract_median_background:
     post:
       tags:
