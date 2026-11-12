@@ -39,11 +39,11 @@ def validate(body: dict[str, Any]) -> dict[str, Any]:
         "image_url": image_url,
         "ra": body.get("ra"),
         "dec": body.get("dec"),
-        "use_ra_dec": body.get("use_ra_dec", False),
-        "pixel_scale": body.get("pixel_scale", 2.5),
+        "use_ra_dec": body["use_ra_dec"],
+        "pixel_scale": body["pixel_scale"],
         "scale_low": body.get("scale_low"),
         "scale_high": body.get("scale_high"),
-        "search_radius": body.get("search_radius", 2.0),
+        "search_radius": body["search_radius"],
     }
 
     if config["use_ra_dec"] and None in [config["ra"], config["dec"]]:

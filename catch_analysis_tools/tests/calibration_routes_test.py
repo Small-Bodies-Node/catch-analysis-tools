@@ -1,11 +1,33 @@
 import base64
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
+
+import yaml
 
 from ..handlers.calibration import astrometry as astrometry_handler
 from ..handlers.calibration import photometry as photometry_handler
 from ..services import generated_images, result_cache
+
+
+def _request_body(route, **values):
+    """Handler unit tests receive a body after middleware has supplied defaults.
+
+    Real HTTP default insertion is covered by calibration_request_validation_test.
+    """
+    specification = yaml.safe_load(
+        (Path(__file__).parents[1] / "app/api/openapi.yaml").read_text()
+    )
+    properties = specification["paths"][f"/calibration/{route}"]["post"]["requestBody"][
+        "content"
+    ]["application/json"]["schema"]["properties"]
+    defaults = {
+        name: schema["default"]
+        for name, schema in properties.items()
+        if "default" in schema
+    }
+    return {**defaults, **values}
 
 
 def _download_response(content=b"FITS"):
@@ -63,7 +85,7 @@ def test_astrometry_handler_publishes_pipeline_fits(tmp_path):
     output_fits = tmp_path / "astrometry.fits"
     output_fits.write_bytes(b"SOLVED")
     config = astrometry_handler.validate(
-        {"image_url": "https://example.org/input.fits"}
+        _request_body("astrometry", image_url="https://example.org/input.fits")
     )
 
     with (
@@ -120,10 +142,11 @@ def test_photometry_handler_returns_both_plots_and_calibrated_fits(tmp_path):
     output_fits = tmp_path / "photometry.fits"
     output_fits.write_bytes(b"CALIBRATED")
     config = photometry_handler.validate(
-        {
-            "wcs_image_url": "https://images.example/astrometry.fits",
-            "color_term": "g-r",
-        }
+        _request_body(
+            "photometry",
+            wcs_image_url="https://images.example/astrometry.fits",
+            color_term="g-r",
+        )
     )
     pipeline_result = {
         "photometry": {
@@ -203,11 +226,12 @@ def test_photometry_handler_returns_both_plots_and_calibrated_fits(tmp_path):
 
 def test_photometry_validation_uses_one_input_contract():
     config = photometry_handler.validate(
-        {
-            "wcs_image_url": "https://images.example/astrometry.fits",
-            "return_plot": True,
-            "plot_type": "image_overlay",
-        }
+        _request_body(
+            "photometry",
+            wcs_image_url="https://images.example/astrometry.fits",
+            return_plot=True,
+            plot_type="image_overlay",
+        )
     )
 
     assert config["color_term"] == "g-r"
@@ -222,7 +246,9 @@ def test_photometry_upload_failure_is_json():
         side_effect=generated_images.GeneratedArtifactUploadError("upload failed"),
     ):
         response = photometry_handler.handler(
-            {"wcs_image_url": "https://images.example/astrometry.fits"}
+            _request_body(
+                "photometry", wcs_image_url="https://images.example/astrometry.fits"
+            )
         )
 
     payload = json.loads(response.get_data(as_text=True))

@@ -33,17 +33,17 @@ def validate(body):
     if not wcs_image_url:
         raise InputValidationError("wcs_image_url is required")
 
-    catalog = body.get("catalog", "PanSTARRS1")
+    catalog = body["catalog"]
     if catalog not in catalogs:
         raise InputValidationError(f"Unknown photometric catalog: {catalog}")
 
     config = {
         "wcs_image_url": wcs_image_url,
-        "snr_threshold": body.get("snr_threshold", 3.0),
-        "aperture_radius": body.get("aperture_radius", 7.0),
+        "snr_threshold": body["snr_threshold"],
+        "aperture_radius": body["aperture_radius"],
         "catalog": catalog,
-        "cal_band": body.get("cal_band", "r"),
-        "color_term": body.get("color_term", "g-r"),
+        "cal_band": body["cal_band"],
+        "color_term": body["color_term"],
     }
     cat = catalogs[catalog]
 

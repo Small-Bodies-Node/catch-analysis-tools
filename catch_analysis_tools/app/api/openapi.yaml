@@ -176,9 +176,10 @@ paths:
                 - wcs_image_url
               properties:
                 wcs_image_url:
-                  description: Public WCS FITS URL returned by /calibration/astrometry.
+                  description: Public WCS FITS URL.
                   type: string
                   format: uri
+                  example: "https://sbnsurveys.astro.umd.edu/api/images/urn:nasa:pds:gbo.ast.atlas.survey.200:57491:02a57491o0502c.fits?ra=205.10371&dec=9.95205&size=10arcmin&format=fits"
                 snr_threshold:
                   description: Signal-to-noise ratio threshold for source detection.
                   type: number
@@ -200,8 +201,9 @@ paths:
                   type: string
                   default: r
                 color_term:
-                  description: Catalog color-index label, for example g-r.
+                  description: Catalog color to use for the photometric calibration.
                   type: string
+                  nullable: true
                   default: "g-r"
       responses:
         "200":
@@ -226,7 +228,8 @@ paths:
                         type: number
                       color_index:
                         type: string
-                        description: Requested color-index label, for example g-r.
+                        nullable: true
+                        description: Catalog color used for the photometric calibration.
                       catalog:
                         type: string
                       cal_band:
