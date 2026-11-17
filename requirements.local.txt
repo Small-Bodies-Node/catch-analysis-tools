@@ -3,6 +3,9 @@
 
 numpy
 astropy
+Pillow>=11.0
+pyavm>=0.9.6
+reproject>=0.14
 photutils
 scipy
 matplotlib

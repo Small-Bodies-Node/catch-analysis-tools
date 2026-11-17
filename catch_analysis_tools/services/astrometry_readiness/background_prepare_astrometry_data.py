@@ -1,4 +1,8 @@
+import logging
+
 from .prepare_astrometry_data import prepare_astrometry_data
+
+logger = logging.getLogger(__name__)
 
 
 def background_prepare_astrometry_data(force=False):
@@ -6,4 +10,4 @@ def background_prepare_astrometry_data(force=False):
     try:
         prepare_astrometry_data(force=force)
     except Exception:
-        pass
+        logger.exception("Background astrometry preparation stopped")

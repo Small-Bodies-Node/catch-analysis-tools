@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from ...add_wcs_compass import add_wcs_compass
+
 matplotlib.use("Agg")
 
 
@@ -52,6 +54,7 @@ def plot_color_correction(
         color_mags,
         calibrated_magnitude - instrumental_magnitude,
         marker=".",
+        label="sources",
     )
 
     x = np.linspace(0, 1.5, 100)
@@ -64,6 +67,7 @@ def plot_color_correction(
 
     ax.set_xlabel(f"${color_index}$ (mag)")
     ax.set_ylabel(r"$m - m_{\mathrm{inst}}$ (mag)")
+    ax.minorticks_on()
     ax.legend()
 
     plt.tight_layout()
@@ -76,6 +80,7 @@ def plot_photometric_matches(
     source_list: pd.DataFrame,
     matched_idx,
     color_corrected_idx,
+    wcs=None,
 ):
     """
     Overlay detected and matched sources on the background-subtracted image.
@@ -149,5 +154,8 @@ def plot_photometric_matches(
     )
 
     ax.legend()
+
+    if wcs is not None:
+        add_wcs_compass(ax, wcs)
 
     return fig, ax

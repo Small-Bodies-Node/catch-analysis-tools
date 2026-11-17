@@ -7,6 +7,7 @@ from ..photometry import (
     get_image,
     subpixel_centroid,
 )
+from .add_wcs_compass import add_wcs_compass
 from .generated_images import upload_figure_png
 from .result_cache import get_or_compute
 
@@ -150,10 +151,10 @@ def _centroid_uncached(file, target_x, target_y, search_radius):
     norm = ImageNormalize(img, interval=ZScaleInterval())
 
     fig, ax = plt.subplots(figsize=(8, 8))
-    ax.imshow(img, norm=norm, cmap="gray_r")
+    ax.imshow(img, norm=norm, cmap="gray_r", origin="lower")
     ax.scatter(
-        img.shape[0] / 2,
-        img.shape[1] / 2,
+        (img.shape[1] - 1) / 2,
+        (img.shape[0] - 1) / 2,
         s=100,
         marker="x",
         label="Image Center",
@@ -170,6 +171,7 @@ def _centroid_uncached(file, target_x, target_y, search_radius):
     ax.set_xlim(target_x - 20, target_x + 20)
     ax.set_ylim(target_y - 20, target_y + 20)
     ax.legend()
+    add_wcs_compass(ax, header)
 
     uploaded_figure = upload_figure_png(fig, "centroid", "centroid.png")
     plt.close(fig)
@@ -228,7 +230,7 @@ def _target_extraction_uncached(body):
     # Could filter out frames where target location and target centroid differ
     # by more than a few pixels here, which may indicate a star hit.
     fig, ax = plt.subplots(figsize=(8, 8))
-    ax.imshow(img, norm=norm, cmap="gray_r")
+    ax.imshow(img, norm=norm, cmap="gray_r", origin="lower")
     target_aperture.plot(color="blue", lw=1.5, alpha=0.5, ax=ax)
     background_aperture.plot(color="yellow", lw=1.5, ax=ax)
     ax.scatter(
@@ -253,6 +255,7 @@ def _target_extraction_uncached(body):
         target_aperture_params["position"][1] + 20,
     )
 
+    add_wcs_compass(ax, header)
     uploaded_figure = upload_figure_png(
         fig,
         "target-photometry",

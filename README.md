@@ -2,6 +2,29 @@
 
 Data analysis tools for CATCH, an astronomical survey search tool
 
+## Calibration previews and scientific coordinates
+
+Astrometry and photometry responses publish `preview_url`, `preview_s3_key`,
+`preview_orientation`, and `preview_renderer_version` alongside their FITS
+artifact. Each PNG is derived from that exact artifact's full WCS, on a centered
+ICRS TAN grid with north up/east left, and contains AVM for its rendered pixels.
+Rendering preserves the scientific FITS bytes. Nearest-neighbor resampling is
+for presentation; calculations continue to use native FITS data and zero-based
+array coordinates. Native pixel diagnostics use a lower origin and a WCS-derived
+N/E compass, so their pixel axes retain their scientific meaning.
+
+Install the updated Pillow, pyavm, and reproject dependencies before deployment.
+The result cache is versioned `v3-north-up`; older calibration results must be
+recomputed to obtain paired previews. Cached preview URLs are refreshed from
+their S3 keys, just like scientific artifact URLs. Deploy CAT before the updated
+GUI; see the GUI README for the cross-service rollout sequence.
+
+Focused checks:
+
+```bash
+python -m pytest --no-cov catch_analysis_tools/tests/north_up_preview_test.py catch_analysis_tools/tests/calibration_routes_test.py catch_analysis_tools/tests/astrometry_readiness_test.py
+```
+
 ## Development and testing
 
 Get required packages useful for development and testing:
@@ -89,32 +112,37 @@ The astrometric calibration pipeline depends on **astrometry.net** index files a
 sudo apt install astrometry.net netpbm
 ```
 
-### 2. Set required environment variables
+### 2. Restore the astrometry index files locally
 
-Define the location of the astrometry.net configuration file and index files.
-For example:
+Put the restored `index-*.fits` files in:
 
-```bash
-export ASTROMETRY_CONFIG=$HOME/.astrometry/config
-export ASTROMETRY_INDEX_DIR=$HOME/.astrometry/data
+```text
+local-data/astrometry-indexes/
 ```
 
-### 3. Download astrometry index files
-
-Optionally download a subset for testing:
+The directory contents are ignored by both Git and Docker's build context.
+Create the inventory and checksums after the restore has finished:
 
 ```bash
-mkdir -p $ASTROMETRY_INDEX_DIR
-
-for i in 00 01 02 03 04 05 06 07; do
-  wget -P $ASTROMETRY_INDEX_DIR \
-    https://portal.nersc.gov/project/cosmo/temp/dstn/index-5200/index-5204-$i.fits
-done
+./_upload_astrometry_indexes --manifest-only
 ```
 
-Otherwise, when the API service is started, all index files will be downloaded, as needed.
+`docker compose up` bind-mounts this directory directly at
+`/root/.astrometry/data`, so local runs use the restored files without copying
+or downloading them again.
 
-Note: These files are required and may take time to download (~GB total).
+### 3. Publish the canonical index set to S3
+
+Terraform creates a private S3 bucket and grants the ECS task read-only access.
+After applying Terraform, upload the local index set with:
+
+```bash
+./_upload_astrometry_indexes
+```
+
+The script skips files whose size and SHA-256 metadata already match and
+uploads the manifest last. In Fargate, the startup readiness process downloads
+that manifest and seeds the shared EFS directory from the private bucket.
 
 ### 4. Create astrometry configuration file
 

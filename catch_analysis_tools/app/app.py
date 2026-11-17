@@ -4,7 +4,9 @@ Entry point to Flask-Connexion API
 """
 
 import connexion
+from connexion.datastructures import MediaTypeDict
 from connexion.middleware import MiddlewarePosition
+from connexion.validators import VALIDATOR_MAP, DefaultsJSONRequestBodyValidator
 from starlette.middleware.cors import CORSMiddleware
 
 from ..services.astrometry_readiness.start_astrometry_background_check import (
@@ -25,6 +27,15 @@ app.add_middleware(
 
 app.add_api(
     "openapi.yaml",
+    # Populate omitted JSON fields from the spec before passing them to handlers.
+    validator_map={
+        "body": MediaTypeDict(
+            {
+                **VALIDATOR_MAP["body"],
+                "*/*json": DefaultsJSONRequestBodyValidator,
+            }
+        ),
+    },
     arguments={
         # "version": str(version),
         # "base_href": ENV.BASE_HREF,

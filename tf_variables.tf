@@ -58,7 +58,7 @@ variable "CONTAINER_PORT" {
 variable "HEALTHCHECK_PATH" {
   description = "ALB health check path expected to return HTTP 200"
   type        = string
-  default     = "/healthz"
+  default     = "/health"
 }
 
 variable "ECS_TASK_CPU" {
@@ -148,4 +148,16 @@ variable "CAT_CACHE_RETENTION_DAYS" {
   description = "Number of days to retain CAT route JSON cache objects"
   type        = number
   default     = 30
+}
+
+variable "CAT_ASTROMETRY_INDEX_BUCKET_NAME" {
+  description = "Private S3 bucket containing the canonical Astrometry.net index files. Leave null to derive from PROJECT_PREFIX."
+  type        = string
+  default     = null
+}
+
+variable "CAT_ASTROMETRY_INDEX_PREFIX" {
+  description = "S3 key prefix containing the astrometry index manifest and FITS files"
+  type        = string
+  default     = "astrometry-indexes/"
 }
